@@ -1,4 +1,5 @@
 use rusqlite::{params, Connection, Result};
+use std::env::temp_dir;
 use std::path::PathBuf;
 
 use crate::track::{TrackAudioContent, TrackAudioRemote, TrackLocation};
@@ -22,19 +23,36 @@ enum InitError {
 	RusqliteError(rusqlite::Error),
 }
 
+impl std::fmt::Display for InitError {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		match self {
+			InitError::AudioDataPathIsNotDir => write!(f, "Audio data path is not a directory"),
+			InitError::RusqliteError(err) => write!(f, "Rusqlite error: {}", err),
+		}
+	}
+}
+
+impl std::error::Error for InitError {}
+
 impl Store {
 	pub async fn new(data_path: PathBuf) -> Result<Store, InitError> {
 		println!("data_path {:?}", data_path);
 
-		let conn = match Self::db_setup(data_path) {
+		let conn = match Self::db_setup(&data_path) {
 			Ok(conn) => conn,
 			Err(err) => return Err(InitError::RusqliteError(err)),
 		};
 
+		let audio_path = data_path.join("audio");
+
 		Result::Ok(Store { conn, audio_path })
 	}
 
-	fn db_setup(data_path: PathBuf) -> Result<Connection, rusqlite::Error> {
+	fn db_setup(data_path: &PathBuf) -> Result<Connection, rusqlite::Error> {
+		if !data_path.exists() {
+			let a = std::fs::create_dir_all(data_path).unwrap();
+		}
+
 		let conn = Connection::open(data_path.join("meta.db"))?;
 		conn.execute(
 			"CREATE TABLE IF NOT EXISTS tracks (
@@ -58,40 +76,40 @@ impl Store {
 		Ok(conn)
 	}
 
-	pub async fn stream_response_to_track(
-		&self,
-		res: reqwest::Response,
-		TrackLocation {
-			profile_slug,
-			track_slug,
-			..
-		}: TrackLocation,
-		extension: String,
-	) -> Option<TrackAudioContent> {
-		let temp_file_name = "adsfa3434"; // TODO: generate random name, uuid
-		let temp_file_path = self
-			.audio_path
-			.join(profile_slug)
-			.join(track_slug)
-			.with_file_name(temp_file_name);
+	// pub async fn stream_response_to_track(
+	// 	&self,
+	// 	res: reqwest::Response,
+	// 	TrackLocation {
+	// 		profile_slug,
+	// 		track_slug,
+	// 		..
+	// 	}: TrackLocation,
+	// 	extension: String,
+	// ) -> Result<TrackAudioContent> {
+	// 	let temp_file_name = "adsfa3434"; // TODO: generate random name, uuid
+	// 	let temp_file_path = self
+	// 		.audio_path
+	// 		.join(profile_slug)
+	// 		.join(track_slug)
+	// 		.with_file_name(temp_file_name);
 
-		let file = match File::create(temp_file_path).await {
-			Err(err) => return None,
-			Ok(file) => file,
-		};
+	// 	let file = match File::create(temp_file_path).await {
+	// 		Err(err) => return None,
+	// 		Ok(file) => file,
+	// 	};
 
-		loop {
-			match res.chunk().await {
-				Err(err) => return None,
-				Ok(None) => return None,
-				Ok(Some(data)) => {
-					file.write_all(data.as_ptr());
-				}
-			}
-		}
+	// 	loop {
+	// 		match res.chunk().await {
+	// 			Err(err) => return None,
+	// 			Ok(None) => return None,
+	// 			Ok(Some(data)) => {
+	// 				file.write_all(data.as_ptr());
+	// 			}
+	// 		}
+	// 	}
 
-		// TODO: download to temp file, hash contents, rename to hashed filename
-	}
+	// 	// TODO: download to temp file, hash contents, rename to hashed filename
+	// }
 
 	/* async fn has_track(
 		&self,

@@ -17,6 +17,12 @@ pub struct TrackAudioContent {
 }
 
 #[derive(Debug)]
+struct TrackInfo {
+	track: TrackLocation,
+	description: String,
+}
+
+#[derive(Debug)]
 pub struct TrackAudioRemote {
 	sound_id: String,
 	extension: String,
@@ -58,7 +64,7 @@ lazy_static! {
 		Regex::new("//media.soundgasm.net/sounds/([0-9a-f]+).([0-9a-zA-Z]+)").unwrap();
 }
 
-async fn get_track_download_url(track: TrackLocation) -> Option<TrackAudioRemote> {
+async fn get_track_info(track: TrackLocation) -> Option<TrackAudioRemote> {
 	let track_page_url = format!(
 		"//soundgasm.net/u/{}/{}",
 		track.profile_slug, track.track_slug
@@ -76,28 +82,28 @@ async fn get_track_download_url(track: TrackLocation) -> Option<TrackAudioRemote
 	})
 }
 
-async fn ensure_track_downloaded(track: Track, store: Store) -> Result<(), reqwest::Error> {
-	if store.has_track(track).await {
-		return;
-	}
+// async fn ensure_track_downloaded(track: Track, store: Store) -> Result<(), reqwest::Error> {
+// 	if store.has_track(track).await {
+// 		return;
+// 	}
 
-	let download_info = get_track_download_url(track).await;
+// 	let download_info = get_track_download_url(track).await;
 
-	if let Some(TrackRemoteMedia {
-		sound_id,
-		extension,
-	}) = download_info
-	{
-		let sound_url = format!(
-			"https://media.soundgasm.net/sounds/{}.{}",
-			sound_id, extension
-		);
+// 	if let Some(TrackRemoteMedia {
+// 		sound_id,
+// 		extension,
+// 	}) = download_info
+// 	{
+// 		let sound_url = format!(
+// 			"https://media.soundgasm.net/sounds/{}.{}",
+// 			sound_id, extension
+// 		);
 
-		let res = reqwest::get(sound_url).await?;
+// 		let res = reqwest::get(sound_url).await?;
 
-		store.stream_response_to_track(res, track, extension)
-	}
-}
+// 		store.stream_response_to_track(res, track, extension)
+// 	}
+// }
 
 #[cfg(test)]
 mod tests {
@@ -124,7 +130,7 @@ mod tests {
 
 		let track_info =
 			parse_track_url_info("//soundgasm.com/u/Profess4orCal_/hi-everyone_2".into()).unwrap();
-		assert!(track_info.is_none());
+		assert!(track_info.);
 
 		let track_info =
 			parse_track_url_info("//dfs.soundgasm.net/u/Profess4orCal_/hi-everyone_2".into()).unwrap();
