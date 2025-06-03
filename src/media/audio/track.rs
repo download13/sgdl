@@ -1,41 +1,16 @@
+use diesel::{deserialize::FromSqlRow, expression::AsExpression};
 use lazy_static::lazy_static;
 use regex::Regex;
 
 use crate::common::{fetch_text, PROFILE_PATTERN};
-use crate::store::{Store, Track};
 
-pub struct TrackId {
-	pub original_url: String,
-	pub profile_slug: String,
-	pub track_slug: String,
-}
-
-lazy_static! {
-	static ref TRACK_URL_RE: Regex = Regex::new(
-		format!(
-			"//(?:www.)?soundgasm.net/u/([{}]+)/([^/]+)",
-			PROFILE_PATTERN
-		)
-		.as_str()
-	)
-	.unwrap();
+pub trait TrackId {
+	pub fn new(url: &String) -> Option<TrackId>,
+	fn to)_url(&self) -> String;
 }
 
 impl TrackId {
-	pub fn new(url: &String) -> Option<TrackId> {
-		let matches = TRACK_URL_RE.captures(url.as_str())?;
-
-		let profile_slug = matches.get(1)?.as_str().into();
-		let track_slug = matches.get(2)?.as_str().into();
-
-		Some(TrackId {
-			original_url: url.to_string(),
-			profile_slug,
-			track_slug,
-		})
-	}
-
-	pub async fn get_track_page_html(&self) -> Option<String> {
+	pub async fn get_track_page(&self) -> Option<String> {
 		let track_page_html = match fetch_text(self.to_url()).await {
 			Ok(html) => html,
 			Err(err) => {
@@ -93,6 +68,15 @@ impl TrackDetails {
 		})
 	}
 
+	#[cfg(not(test))]
+	pub fn get_audio_url(&self) -> String {
+		format!(
+			"https://media.soundgasm.net/sounds/{}.{}",
+			self.sound_id, self.extension
+		)
+	}
+
+	#[cfg(test)]
 	pub fn get_audio_url(&self) -> String {
 		format!(
 			"https://media.soundgasm.net/sounds/{}.{}",
@@ -107,20 +91,33 @@ mod tests {
 
 	#[test]
 	fn test_parse_track_url_info() {
-		let track_info =
-			TrackId::new(&"//www.soundgasm.net/u/Profess4orCal_/hi-everyone_2".into()).unwrap();
-		assert_eq!(track_info.profile_slug, "Profess4orCal_");
-		assert_eq!(track_info.track_slug, "hi-everyone_2");
+		let track_info = TrackId::new(
+			&"//www.soundgasm.net/u/sgdl-test/shopping-mall-half-open-Netherlands-207-AM-161001_0998"
+				.into(),
+		)
+		.unwrap();
+		assert_eq!(track_info.profile_slug, "sgdl-test");
+		assert_eq!(
+			track_info.track_slug,
+			"shopping-mall-half-open-Netherlands-207-AM-161001_0998"
+		);
 
+		// Without schema
 		let track_info =
 			TrackId::new(&"//www.soundgasm.net/u/!@#$$^&*()_+/!@#$^&*()_+".into()).unwrap();
 		assert_eq!(track_info.profile_slug, "!@#$$^&*()_+");
 		assert_eq!(track_info.track_slug, "!@#$^&*()_+");
 
-		let track_info =
-			TrackId::new(&"//soundgasm.net/u/Profess4orCal_/hi-everyone_2".into()).unwrap();
-		assert_eq!(track_info.profile_slug, "Profess4orCal_");
-		assert_eq!(track_info.track_slug, "hi-everyone_2");
+		// Without schema or subdomain
+		let track_info = TrackId::new(
+			&"//soundgasm.net/u/sgdl-test/shopping-mall-half-open-Netherlands-207-AM-161001_0998".into(),
+		)
+		.unwrap();
+		assert_eq!(track_info.profile_slug, "/sgdl-test");
+		assert_eq!(
+			track_info.track_slug,
+			"shopping-mall-half-open-Netherlands-207-AM-161001_0998"
+		);
 	}
 
 	#[test]
@@ -130,12 +127,17 @@ mod tests {
 		let track_info = TrackId::new(&url);
 		assert!(track_info.is_none());
 
-		// Close, but wrong domain
-		let track_info = TrackId::new(&"//soundgasm.com/u/Profess4orCal_/hi-everyone_2".into());
+		// Close, but wrong tld
+		let track_info = TrackId::new(
+			&"//soundgasm.com/u/sgdl-test/shopping-mall-half-open-Netherlands-207-AM-161001_0998".into(),
+		);
 		assert!(track_info.is_none());
 
 		// Wrong subdomain
-		let track_info = TrackId::new(&"//dfs.soundgasm.net/u/Profess4orCal_/hi-everyone_2".into());
+		let track_info = TrackId::new(
+			&"//dfs.soundgasm.net/u/sgdl-test/shopping-mall-half-open-Netherlands-207-AM-161001_0998"
+				.into(),
+		);
 		assert!(track_info.is_none());
 	}
 }

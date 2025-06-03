@@ -1,5 +1,3 @@
-mod profile;
-mod track;
+mod scan;
 
-pub use profile::add_profile;
-pub use track::add_track;
+pub use scan::scan_command;

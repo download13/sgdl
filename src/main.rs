@@ -25,39 +25,17 @@ struct Cli {
 
 #[derive(Subcommand, Debug)]
 enum Commands {
-	/// download a track by it's URL
+	/// catalog media associated with the string provided
 	#[command(arg_required_else_help = true)]
-	Track {
-		/// URL of the track to download
-		track_url: String,
+	Scan {
+		/// URL or other indicator of media to scan
+		media_string: String,
 	},
 
-	/// download all tracks in an author's public profile
 	#[command(arg_required_else_help = true)]
-	Profile {
-		/// URL or slug of the profile
-		profile_id_or_url: String,
-	},
-
-	/// TODO: find tracks not in the public profile using a search engine
-	#[command(arg_required_else_help = true)]
-	AddProfile {
-		/// URL or slug of the profile
-		profile_id_or_url: String,
-	},
-
-	/// add track to the database
-	#[command(arg_required_else_help = true)]
-	AddTrack {
-		/// URL or slug of the profile
-		track_url: String,
-	},
-
-	/// find tracks locally in the database
-	#[command(arg_required_else_help = true)]
-	LocalSearch {
-		/// search terms
-		terms: String,
+	Ensure {
+		/// URL or other indicator of media to ensure is downloaded
+		media_string: String,
 	},
 }
 
@@ -82,7 +60,7 @@ async fn main() {
 
 	let cmd = cli.command.unwrap();
 
-	let mut store = match Store::new(&data_path).await {
+	let store = match Store::new(&data_path).await {
 		Ok(store) => store,
 		Err(err) => {
 			eprintln!("Error initializing store: {:?}", err);
@@ -97,16 +75,20 @@ async fn main() {
 	// TODO: live tag search and create newsfeed
 
 	match cmd {
-		Track { track_url } => commands::add_track(context, track_url).await,
-		LocalSearch { terms } => {
-			println!("searching for {}", terms);
-			context.store.search_tracks(terms).await;
+		Scan { media_string } => {
+			commands::scan_command(media_string, &mut context).await;
 		}
-		AddProfile { profile_id_or_url } => {
-			println!("downloading profile {}", profile_id_or_url);
-			commands::add_profile(&mut context, profile_id_or_url).await;
-		}
-		AddTrack { track_url } => commands::add_profile(&mut context, track_url).await,
-		_ => return,
+		// Ensure { media_string } => {
+		// 	commands::ensure_command(&mut context, media_string).await;
+		// }
+		_ => (),
 	}
+}
+
+async fn display_progress(total: u64, downloaded: u64) {
+	let percentage = (downloaded as f64 / total as f64) * 100.0;
+	println!(
+		"Downloaded: {} of {} bytes ({:.2}%)",
+		downloaded, total, percentage
+	);
 }

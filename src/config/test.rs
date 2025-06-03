@@ -10,7 +10,9 @@ pub fn init_test_server() -> String {
 		then
 			.status(200)
 			.header("content-type", "text/html")
-			.body(include_str!("../../testdata/profiles/sgdl-test/index.html"));
+			.body(include_str!(
+				"../../test/fixtures/http/profiles/sgdl-test/index.html"
+			));
 	});
 
 	server.mock(|when, then| {
@@ -18,7 +20,7 @@ pub fn init_test_server() -> String {
 		then
 			.status(200)
 			.header("content-type", "text/html")
-			.body(include_str!("../../testdata/profiles/sgdl-test/tracks/shopping-mall-half-open-Netherlands-207-AM-161001_0998.html"));
+			.body(include_str!("../../test/fixtures/http/profiles/sgdl-test/tracks/shopping-mall-half-open-Netherlands-207-AM-161001_0998.html"));
 	});
 
 	format!("http://localhost:{}", server.port())

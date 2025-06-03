@@ -43,7 +43,7 @@ impl Config {
 
 	#[cfg(test)]
 	fn get_data_path() -> PathBuf {
-		let data_path = current_dir().unwrap().join("testdata/working");
+		let data_path = current_dir().unwrap().join("test/tmp");
 		if !data_path.exists() {
 			std::fs::create_dir_all(&data_path).unwrap();
 		}

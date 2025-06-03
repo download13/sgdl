@@ -40,12 +40,12 @@ pub async fn add_profile(context: &mut Context, profile_id_or_url: String) {
 // 		assert!(track_info.is_none());
 
 // 		// Close, but wrong domain
-// 		let track_info = TrackId::new(&"//soundgasm.com/u/Profess4orCal_/hi-everyone_2".to_string());
+// 		let track_info = TrackId::new(&"//soundgasm.com/u/sgdl-test/shopping-mall-half-open-Netherlands-207-AM-161001_0998".to_string());
 // 		assert!(track_info.is_none());
 
 // 		// Wrong subdomain
 // 		let track_info =
-// 			TrackId::new(&"//dfs.soundgasm.net/u/Profess4orCal_/hi-everyone_2".to_string());
+// 			TrackId::new(&"//dfs.soundgasm.net/u/sgdl-test/shopping-mall-half-open-Netherlands-207-AM-161001_0998".to_string());
 // 		assert!(track_info.is_none());
 // 	}
 // }

@@ -7,14 +7,15 @@ edition = "2021"
 
 [dependencies]
 async-fs = "2.1.2"
+chrono = "0.4.41"
 clap = { version = "4.5.37", features = ["derive"] }
 confy = "0.6.1"
 diesel = { version = "2.2.10", features = [
 	"sqlite",
 	"returning_clauses_for_sqlite_3_35",
+	"chrono",
 ] }
 directories = "6.0.0"
-dotenvy = "0.15.7"
 httpmock = "0.7.0"
 lazy_static = "1.5.0"
 libsqlite3-sys = { version = "0.33.0", features = ["bundled"] }

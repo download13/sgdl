@@ -1,6 +1,5 @@
 use diesel::prelude::*;
-use dotenvy::dotenv;
-use std::env;
+use schema::tracks::content_length;
 use std::path::PathBuf;
 use tokio::fs::File;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
@@ -11,56 +10,18 @@ use crate::track::{TrackDetails, TrackId};
 
 use self::schema::tracks::dsl as tracks_dsl;
 
+mod audio_track;
 #[path = "../schema.rs"]
 pub mod schema;
+mod soundgasm_track;
+
+define_sql_function! {
+	fn current_timestamp() -> Timestamp;
+}
 
 pub struct Store {
 	conn: SqliteConnection,
 	data_path: PathBuf,
-}
-
-#[derive(Debug, Clone, Queryable, Selectable, Insertable)]
-#[diesel(table_name = schema::tracks)]
-#[diesel(check_for_backend(diesel::sqlite::Sqlite))]
-pub struct Track {
-	pub fetch_url: String,
-	pub profile_slug: String,
-	pub track_slug: String,
-	pub title: String,
-	pub description: String,
-	pub file_extension: String,
-	pub content_hash: String,
-	pub content_length: i64,
-}
-
-impl From<(TrackId, TrackDetails)> for Track {
-	fn from((track_id, track_details): (TrackId, TrackDetails)) -> Self {
-		Track {
-			fetch_url: track_id.original_url,
-			profile_slug: track_id.profile_slug,
-			track_slug: track_id.track_slug,
-			title: track_details.title,
-			description: track_details.description,
-			file_extension: track_details.extension,
-			content_hash: String::new(),
-			content_length: 0 as i64,
-		}
-	}
-}
-
-impl From<&ProfileTrackListing> for Track {
-	fn from(track_listing: &ProfileTrackListing) -> Self {
-		Track {
-			fetch_url: String::new(),
-			profile_slug: track_listing.profile_slug.clone(),
-			track_slug: track_listing.track_slug.clone(),
-			title: track_listing.title.clone(),
-			description: track_listing.description.clone(),
-			content_length: 0,
-			content_hash: String::new(),
-			file_extension: String::new(),
-		}
-	}
 }
 
 impl Store {
@@ -76,18 +37,17 @@ impl Store {
 	}
 
 	fn establish_connection(data_path: &PathBuf) -> SqliteConnection {
-		dotenv().ok();
-
 		let audio_path = data_path.join("audio");
 		if !audio_path.exists() {
 			std::fs::create_dir_all(audio_path).unwrap();
 		}
 
-		let database_url = env::var("DATABASE_URL").expect("DATABASE_URL must be set");
+		let database_path = data_path.join("data/meta.sqlite3");
+		let database_str = database_path.to_str().unwrap();
 
-		SqliteConnection::establish(&database_url).unwrap_or_else(|err| {
+		SqliteConnection::establish(database_str).unwrap_or_else(|err| {
 			println!("Error connecting to {err:?}");
-			panic!("Error connecting to {}", database_url);
+			panic!("Error connecting to {}", database_str);
 		})
 	}
 
@@ -106,7 +66,7 @@ impl Store {
 		let formatted_terms = format!("%{}%", terms);
 
 		let result = tracks_dsl::tracks
-			.select(Track::as_select())
+			.select(TrackRow::as_select())
 			.filter(
 				title
 					.like(formatted_terms.clone())
@@ -152,7 +112,19 @@ impl Store {
 
 		let tracks: Vec<Track> = track_listings
 			.iter()
-			.map(|track| Track::from(track))
+			.map(|listing| Track {
+				id: TrackId {
+					profile_slug: listing.profile_slug.clone(),
+					track_slug: listing.track_slug.clone(),
+				},
+				details: TrackDetails {
+					title: listing.title.clone(),
+					description: listing.description.clone(),
+					sound_id: None,  // Placeholder, not used in this context
+					extension: None, // Default extension, can be changed later
+				},
+				audio: None,
+			})
 			.collect();
 
 		let mut added_count: u64 = 0;
@@ -174,23 +146,10 @@ impl Store {
 		added_count
 	}
 
-	async fn verify_audio_file(
-		&self,
-		Track {
-			profile_slug,
-			track_slug,
-			file_extension,
-			content_hash,
-			content_length,
-			..
-		}: &Track,
-	) -> bool {
+	// TODO: Convert the print messages and failures to some kind of stream or progress reporting
+	async fn verify_audio_file(&self, track: &Track) -> bool {
 		let audio_path = self.get_audio_path();
-		let track_path = audio_path
-			.join(profile_slug)
-			.join(track_slug)
-			.with_extension(file_extension);
-
+		let track_path = self.get_track_path(&track);
 		if !track_path.is_file() {
 			return false;
 		}
@@ -203,9 +162,12 @@ impl Store {
 			return false;
 		};
 
-		if metadata.len() != *content_length as u64 {
+		let content_hash = track.audio.content_hash;
+		let content_length = track.audio.content_length as u64;
+
+		if metadata.len() != content_length {
 			println!("File size mismatch");
-			println!("Expected: {}", content_length);
+			println!("Expected: {:?}", track.audio.content_length);
 			println!("Actual: {}", metadata.len());
 			return false;
 		}
@@ -230,7 +192,7 @@ impl Store {
 		let hash_hex = format!("{:x}", hash);
 		if hash_hex != *content_hash {
 			println!("File hash mismatch");
-			println!("Expected: {}", content_hash);
+			println!("Expected: {:?}", content_hash);
 			println!("Actual: {}", hash_hex);
 			return false;
 		}
@@ -244,15 +206,12 @@ impl Store {
 
 	pub async fn stream_response_to_track(
 		&self,
-		mut track: Track,
+		track: Track,
 		mut res: reqwest::Response,
 	) -> Option<Track> {
-		let file_path = self
-			.get_audio_path()
-			.join(&track.profile_slug)
-			.join(&track.track_slug)
-			.with_extension(&track.file_extension);
+		let id = track.id.clone();
 
+		let file_path = self.get_track_path(&track);
 		if file_path.exists() {
 			println!("File already exists: {}", file_path.display());
 			return None;
@@ -288,11 +247,16 @@ impl Store {
 		let hash_hex = format!("{:x}", hash);
 		let content_length = file.metadata().await.unwrap().len();
 
-		track.content_hash = hash_hex;
-		track.content_length = content_length as i64;
-
 		// TODO: save track to database
 
 		Some(track)
+	}
+
+	fn get_track_path(&self, track: &Track) -> PathBuf {
+		self
+			.get_audio_path()
+			.join(&track.id.profile_slug)
+			.join(&track.id.track_slug)
+			.with_extension(&track.details.extension)
 	}
 }
