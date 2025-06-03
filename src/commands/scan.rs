@@ -5,8 +5,19 @@ use crate::{
 };
 
 pub fn scan_command(media_string: String, context: &mut Context) {
+	let source = recognize_media_source(&media_string);
+	if source.is_none() {
+		println!("Unrecognized media source for: {}", media_string);
+		return;
+	}
+
+	match source.unwrap() {
+		MediaSource::Soundgasm => {}
+		MediaSource::Kemono => scan_kemono(media_string, context),
+	}
+
 	let track = parse_track(media_string);
-	let profile = parse_profile(&profile_id_or_url);
+	let profile = parse_profile(&media_string);
 
 	let profile_url = format!("{}/{}", context.config.get_server_url(), profile_slug);
 	let profile_page_html = match fetch_text(profile_url).await {
