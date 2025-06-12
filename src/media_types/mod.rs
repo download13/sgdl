@@ -1,3 +1,5 @@
+use crate::media_sources::MediaSource;
+
 pub enum MediaType {
 	Audio = 0,
 	Video = 1,
@@ -6,10 +8,24 @@ pub enum MediaType {
 	Pdf = 4,
 }
 
+// Things you can do with each media source:
+// Scan SG Profile -> Add profile to library
+// Scan KemonoProfile -> Add profile to library, add all posts to library
+// Add SG Track -> Add track to library
+// Add KemonoPost -> Add post to library, add all media items to library
+
+// Things you can get from a pointer:
+// SG Profile -> Vec<impl MediaPointer>
+// SG Track -> impl AudioTrack
+// KemonoProfile -> Vec<KemonoPage>
+// KemonoPage -> Vec<KemonoPost>
+// KemonoPost -> Vec<MediaItem>
+
 pub trait MediaItem {
-	pub fn get_source(&self) -> MediaSource;
-	pub fn get_file_path(&self) -> String;
-	pub async fn try_download(&self) -> bool;
-	pub async fn verify_metadata(&self) -> bool;
-	pub async fn verify_blob(&self) -> bool;
+	fn get_source(&self) -> MediaSource;
+	fn get_type() -> MediaType;
+
+	async fn try_download(&self) -> bool;
+	async fn verify_metadata(&self) -> bool;
+	async fn verify_blob(&self) -> bool;
 }

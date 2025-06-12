@@ -2,8 +2,8 @@ use crate::{common::PROFILE_PATTERN, track::TrackId};
 use lazy_static::lazy_static;
 use regex::Regex;
 
-pub struct AudioProfileId {
-	profile_slug: String,
+pub struct SoundgasmProfilePointer {
+	slug: String,
 }
 
 lazy_static! {
@@ -11,9 +11,9 @@ lazy_static! {
 		Regex::new(format!("//(?:www.)?soundgasm.net/u/([{}]+)", PROFILE_PATTERN).as_str()).unwrap();
 }
 
-impl AudioProfileId {
-	pub fn new(profile_id_or_url: &String) -> Option<AudioProfileId> {
-		let profile_slug = Self::parse_profile_slug(profile_id_or_url);
+impl SoundgasmProfilePointer {
+	pub fn parse(profile_id_or_url: &String) -> Option<SoundgasmProfilePointer> {
+		let profile_slug = Self::parse_profile_slug(profile_id_or_url)?;
 		if profile_slug.is_empty() {
 			return None;
 		}
@@ -21,11 +21,8 @@ impl AudioProfileId {
 		Some(AudioProfileId { profile_slug })
 	}
 
-	pub fn parse_profile_slug(profile_id_or_url: &String) -> String {
-		let profile_slug = PROFILE_URL_RE.captures(profile_id_or_url);
-		if profile_slug.is_none() {
-			return String::new();
-		}
+	pub fn parse_profile_slug(profile_id_or_url: &String) -> Option<String> {
+		let profile_slug = PROFILE_URL_RE.captures(profile_id_or_url)?;
 
 		let profile_slug = profile_slug.unwrap().get(1).unwrap().as_str();
 		profile_slug.to_string()

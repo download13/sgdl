@@ -1,8 +1,5 @@
+use crate::media_types::MediaItem;
 use core::panic;
-use media_item::MediaItem;
-
-#[path = "media_item.rs"]
-mod media_item;
 
 pub struct AudioTrack {
 	pub audio_url: String,

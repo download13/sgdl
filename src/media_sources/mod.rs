@@ -1,40 +1,31 @@
+mod kemono;
+mod soundgasm;
+
+use crate::media_sources::soundgasm::{SoundgasmProfilePointer, SoundgasmTrackPointer};
 use crate::media_types::MediaItem;
 
-pub enum MediaSourceType {
-	Soundgasm = 0,
-	Kemono = 1,
+pub enum MediaSource {
+	Soundgasm,
+	Kemono,
 }
 
-pub(crate) async fn extract_media_items(media_string: &str) -> Vec<MediaItem> {
-	let source = recognize_media_source_from_string(media_string);
-
-	match source {
-		Some(MediaSourceType::Soundgasm) => {
-			let track = soundgasm::parse_track(media_string).await;
-			let profile = soundgasm::parse_profile(media_string).await;
-
-			if let Some(track) = track {
-				vec![track]
-			} else if let Some(profile) = profile {
-				profile.get_tracks().await
-			} else {
-				vec![]
-			}
-		}
-		Some(MediaSourceType::Kemono) => kemonoparty::extract_media_items(media_string).await,
-		None => vec![],
-	}
+pub enum PointerType {
+	SoundgasmTrack(SoundgasmTrackPointer),
+	SoundgasmProfile(SoundgasmProfilePointer),
+	KemonoPost,
+	KemonoProfile,
 }
 
-fn recognize_media_source_from_string(media_string: &str) -> Option<MediaSourceType> {
-	if media_string.contains("soundgasm.net") {
-		Some(MediaSourceType::Soundgasm)
-	} else if media_string.contains("kemono.party")
-		|| media_string.contains("kemono.su")
-		|| media_string.contains("coomer.su")
-	{
-		Some(MediaSourceType::Kemono)
-	} else {
-		None
-	}
+pub trait MediaPointer {
+	fn get_source(&self) -> MediaSource;
+	async fn fetch_metadata(&self) -> Vec<impl MediaItem>;
+}
+
+pub trait MediaItemPointer {
+	fn get_source(&self) -> MediaSource;
+	async fn fetch_metadata(&self) -> Vec<impl MediaItem>;
+}
+
+pub fn recognize_media_source_from_string(media_string: &str) -> Option<PointerType> {
+	let track_pointer = SoundgasmTrackPointer::try_parse(media_string);
 }

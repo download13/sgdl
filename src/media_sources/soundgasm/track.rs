@@ -4,29 +4,24 @@ use regex::Regex;
 
 use crate::common::{fetch_text, PROFILE_PATTERN};
 
-pub trait TrackId {
-	pub fn new(url: &String) -> Option<TrackId>,
-	fn to)_url(&self) -> String;
+pub struct SoundgasmTrackPointer {
+	profile: SoundgasmProfilePointer,
+	slug: String,
 }
 
-impl TrackId {
-	pub async fn get_track_page(&self) -> Option<String> {
-		let track_page_html = match fetch_text(self.to_url()).await {
-			Ok(html) => html,
-			Err(err) => {
-				println!("Error fetching track page: {}", err);
-				return None;
-			}
-		};
+pub impl SoundgasmTrackPointer {
+	pub fn try_parse(track_id_or_url: &String) -> Option<SoundgasmTrackPointer> {
+		let profile = SoundgasmProfilePointer::parse(track_id_or_url)?;
+		let track_slug = Self::parse_track_slug(track_id_or_url)?;
 
-		Some(track_page_html)
-	}
+		if track_slug.is_empty() {
+			return None;
+		}
 
-	pub fn to_url(&self) -> String {
-		format!(
-			"//soundgasm.net/u/{}/{}",
-			self.profile_slug, self.track_slug
-		)
+		Some(SoundgasmTrackPointer {
+			profile,
+			slug: track_slug,
+		})
 	}
 }
 

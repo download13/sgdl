@@ -1,9 +1,9 @@
 mod commands;
 mod common;
 mod config;
-mod profile;
+mod media_sources;
+mod media_types;
 mod store;
-mod track;
 
 use clap::{Parser, Subcommand};
 use config::Config;
