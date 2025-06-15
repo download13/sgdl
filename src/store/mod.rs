@@ -1,12 +1,12 @@
 use diesel::prelude::*;
+use log::info;
 use schema::tracks::content_length;
 use std::path::PathBuf;
 use tokio::fs::File;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use xxhash_rust::xxh3::Xxh3;
 
-use crate::profile::ProfileTrackListing;
-use crate::track::{TrackDetails, TrackId};
+use crate::Context;
 
 use self::schema::tracks::dsl as tracks_dsl;
 
@@ -17,6 +17,15 @@ mod soundgasm_track;
 
 define_sql_function! {
 	fn current_timestamp() -> Timestamp;
+}
+
+pub fn add_metadata_to_library(
+	context: &Context,
+	metadata: soundgasm::TrackMetadata,
+) -> Result<(), String> {
+	info!("Adding metadata to library: {:?}", metadata);
+
+	let mut store = context.store.lock().unwrap();
 }
 
 pub struct Store {

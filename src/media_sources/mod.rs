@@ -1,7 +1,6 @@
 mod kemono;
 mod soundgasm;
 
-use crate::media_sources::soundgasm::{SoundgasmProfilePointer, SoundgasmTrackPointer};
 use crate::media_types::MediaItem;
 
 pub enum MediaSource {
@@ -10,10 +9,10 @@ pub enum MediaSource {
 }
 
 pub enum PointerType {
-	SoundgasmTrack(SoundgasmTrackPointer),
-	SoundgasmProfile(SoundgasmProfilePointer),
-	KemonoPost,
-	KemonoProfile,
+	SoundgasmTrack(soundgasm::TrackPointer),
+	SoundgasmProfile(soundgasm::ProfilePointer),
+	KemonoPost(kemono::PostPointer),
+	KemonoProfile(kemono::ProfilePointer),
 }
 
 pub trait MediaPointer {
@@ -26,6 +25,22 @@ pub trait MediaItemPointer {
 	async fn fetch_metadata(&self) -> Vec<impl MediaItem>;
 }
 
-pub fn recognize_media_source_from_string(media_string: &str) -> Option<PointerType> {
-	let track_pointer = SoundgasmTrackPointer::try_parse(media_string);
+pub fn recognize_pointer_from_string(media_string: &str) -> Option<PointerType> {
+	if let Some(sg_track_pointer) = soundgasm::TrackPointer::from_url(media_string) {
+		return Some(PointerType::SoundgasmTrack(sg_track_pointer));
+	}
+
+	if let Some(sg_profile_pointer) = soundgasm::ProfilePointer::from_url(media_string) {
+		return Some(PointerType::SoundgasmProfile(sg_profile_pointer));
+	}
+
+	if let Some(kemono_post_pointer) = kemono::PostPointer::from_url(media_string) {
+		return Some(PointerType::KemonoPost(kemono_post_pointer));
+	}
+
+	if let Some(kemono_profile_pointer) = kemono::ProfilePointer::from_url(media_string) {
+		return Some(PointerType::KemonoProfile(kemono_profile_pointer));
+	}
+
+	None
 }

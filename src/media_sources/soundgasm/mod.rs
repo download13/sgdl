@@ -1,9 +1,5 @@
-mod profile {
-	pub struct SoundgasmProfilePointer;
-}
-mod track {
-	pub struct SoundgasmTrackPointer;
-}
+mod profile;
+mod track;
 
-pub use profile::SoundgasmProfilePointer;
-pub use track::SoundgasmTrackPointer;
+pub use profile::ProfilePointer;
+pub use track::{TrackMetadata, TrackPointer};

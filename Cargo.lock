@@ -2076,6 +2076,7 @@ dependencies = [
  "httpmock",
  "lazy_static",
  "libsqlite3-sys",
+ "log",
  "regex",
  "reqwest",
  "serde",

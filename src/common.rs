@@ -17,5 +17,3 @@ pub async fn fetch_text(url: String) -> Result<String, Error> {
 pub async fn stream_bytes(url: String) -> Result<reqwest::Response, Error> {
 	CLIENT.get(url).send().await
 }
-
-pub const PROFILE_PATTERN: &str = "a-zA-Z0-9_-";
