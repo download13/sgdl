@@ -1,52 +1,89 @@
 use lazy_static::lazy_static;
 use regex::Regex;
 
-use crate::media_sources::soundgasm::TrackPointer;
+use super::super::track::TrackPointer;
+use crate::{common::fetch_text, media_sources::soundgasm::profile::Profile};
 
 pub const PROFILE_SLUG_PATTERN: &str = "a-zA-Z0-9_-";
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct ProfilePointer {
-	pub slug: String,
+	slug: String,
 }
 
 impl ProfilePointer {
-	pub fn new(slug: &str) -> Self {
-		Self {
-			slug: slug.to_string(),
-		}
+	pub fn from_slug(maybe_slug: &str) -> Option<Self> {
+		let profile_matches = PROFILE_SLUG_RE.captures(maybe_slug)?;
+		let slug = profile_matches.get(1)?.as_str().to_string();
+
+		Some(Self { slug })
 	}
-}
 
-impl ProfilePointer {
 	pub fn from_url(url: &str) -> Option<Self> {
-		let profile_slug = Self::parse_profile_slug(url)?;
-		if profile_slug.is_empty() {
-			return None;
+		let profile_matches = PROFILE_URL_RE.captures(url)?;
+		let slug = profile_matches.get(1)?.as_str().to_string();
+
+		Some(Self { slug })
+	}
+
+	pub fn get_url(&self) -> String {
+		format!("https://soundgasm.net/u/{}", self.slug)
+	}
+
+	pub async fn fetch_profile(&self) -> Option<Profile> {
+		let profile_html = fetch_text(self.get_url()).await.ok()?;
+
+		Some(Profile::from_html(&profile_html)?)
+	}
+}
+
+impl From<TrackPointer> for ProfilePointer {
+	fn from(track_pointer: TrackPointer) -> Self {
+		Self {
+			slug: track_pointer.profile_slug.clone(),
 		}
-
-		Some(ProfilePointer { slug: profile_slug })
-	}
-
-	pub fn from_track_pointer(track_pointer: &TrackPointer) -> Self {
-		track_pointer.profile.clone()
-	}
-
-	pub fn parse_profile_slug(profile_id_or_url: &String) -> Option<String> {
-		let profile_slug = PROFILE_URL_RE.captures(profile_id_or_url)?;
-
-		let profile_slug = profile_slug.get(1)?.as_str();
-		Some(profile_slug.to_string())
 	}
 }
 
 lazy_static! {
-	static ref PROFILE_URL_RE: Regex = Regex::new(
-		format!(
-			"//(?:www.)?soundgasm.net/u/([{}]+?)/?",
-			PROFILE_SLUG_PATTERN
-		)
-		.as_str()
-	)
-	.unwrap();
+	static ref PROFILE_URL_RE: Regex =
+		Regex::new(format!("//(?:www.)?soundgasm.net/u/([{}]+)/?", PROFILE_SLUG_PATTERN).as_str())
+			.unwrap();
+	static ref PROFILE_SLUG_RE: Regex =
+		Regex::new(format!("([{}]+)", PROFILE_SLUG_PATTERN).as_str()).unwrap();
+}
+
+#[cfg(test)]
+mod tests {
+	use super::ProfilePointer;
+
+	#[test]
+	fn test_parse_profile_pointer_from_url() {
+		// With subdomain
+		let pointer = ProfilePointer::from_url("https://www.soundgasm.net/u/sgdl-test").unwrap();
+		assert_eq!(pointer.slug, "sgdl-test");
+
+		// Without subdomain and schema
+		let pointer = ProfilePointer::from_url("//soundgasm.net/u/sgdl-test").unwrap();
+		assert_eq!(pointer.slug, "sgdl-test");
+
+		// With trailing slash
+		let pointer = ProfilePointer::from_url("//soundgasm.net/u/sgdl-test/").unwrap();
+		assert_eq!(pointer.slug, "sgdl-test");
+	}
+
+	#[test]
+	fn test_parse_invalid_profile_pointer() {
+		// Not even a URL
+		let pointer = ProfilePointer::from_url("invalid_url");
+		assert!(pointer.is_none());
+
+		// Close, but wrong tld
+		let pointer = ProfilePointer::from_url("//soundgasm.com/u/sgdl-test");
+		assert!(pointer.is_none());
+
+		// Wrong subdomain
+		let pointer = ProfilePointer::from_url("//dfs.soundgasm.net/u/sgdl-test/");
+		assert!(pointer.is_none());
+	}
 }

@@ -1,5 +1,5 @@
 use lazy_static::lazy_static;
-use reqwest::{Client, Error};
+use reqwest::{Client /* Error */};
 
 lazy_static! {
 	static ref CLIENT: Client = {

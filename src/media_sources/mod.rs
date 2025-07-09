@@ -1,29 +1,32 @@
+use self::soundgasm::TrackPointer;
+
 mod kemono;
-mod soundgasm;
+pub mod soundgasm;
 
-use crate::media_types::MediaItem;
+// use crate::media_types::MediaItem;
 
-pub enum MediaSource {
+pub enum ProviderType {
 	Soundgasm,
 	Kemono,
+	Patreon,
 }
 
 pub enum PointerType {
-	SoundgasmTrack(soundgasm::TrackPointer),
+	SoundgasmTrack(TrackPointer),
 	SoundgasmProfile(soundgasm::ProfilePointer),
 	KemonoPost(kemono::PostPointer),
 	KemonoProfile(kemono::ProfilePointer),
 }
 
-pub trait MediaPointer {
-	fn get_source(&self) -> MediaSource;
-	async fn fetch_metadata(&self) -> Vec<impl MediaItem>;
-}
+// pub trait MediaPointer {
+// 	fn get_source(&self) -> MediaSource;
+// 	async fn fetch_metadata(&self) -> Vec<impl MediaItem>;
+// }
 
-pub trait MediaItemPointer {
-	fn get_source(&self) -> MediaSource;
-	async fn fetch_metadata(&self) -> Vec<impl MediaItem>;
-}
+// pub trait MediaItemPointer {
+// 	fn get_source(&self) -> MediaSource;
+// 	async fn fetch_metadata(&self) -> Vec<impl MediaItem>;
+// }
 
 pub fn recognize_pointer_from_string(media_string: &str) -> Option<PointerType> {
 	if let Some(sg_track_pointer) = soundgasm::TrackPointer::from_url(media_string) {

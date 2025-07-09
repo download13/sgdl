@@ -1,17 +1,17 @@
 use lazy_static::lazy_static;
 use regex::Regex;
 
+use super::sound_pointer::TrackSoundPointer;
 use crate::media_sources::soundgasm::{
-	profile::ProfilePointer,
-	track::{metadata::TrackMetadata, TRACK_SLUG_PATTERN},
+	profile::PROFILE_SLUG_PATTERN, track::TrackMetadata, SoundgasmAudioTrackRow,
 };
 
-// No difference in slug pattern for tracks and profiles as far as I can tell
-const PROFILE_SLUG_PATTERN: &str = TRACK_SLUG_PATTERN;
+pub const TRACK_SLUG_PATTERN: &str = "a-zA-Z0-9_-";
 
+#[derive(Debug, Clone)]
 pub struct TrackPointer {
-	pub profile: ProfilePointer,
-	pub slug: String,
+	pub profile_slug: String,
+	pub track_slug: String,
 }
 
 impl TrackPointer {
@@ -21,41 +21,43 @@ impl TrackPointer {
 			let track_slug = caps.get(2)?;
 
 			Some(Self {
-				profile: ProfilePointer {
-					slug: profile_slug.as_str().to_string(),
-				},
-				slug: track_slug.as_str().to_string(),
+				profile_slug: profile_slug.as_str().to_string(),
+				track_slug: track_slug.as_str().to_string(),
 			})
 		})?
-	}
-
-	pub fn get_profile(&self) -> &ProfilePointer {
-		&self.profile
-	}
-
-	pub fn get_slug(&self) -> &String {
-		&self.slug
 	}
 
 	pub fn to_url(&self) -> String {
 		format!(
 			"https://soundgasm.net/u/{}/{}",
-			self.profile.slug, self.slug
+			self.profile_slug, self.track_slug
 		)
 	}
 
-	pub async fn fetch_metadata(&self) -> Option<TrackMetadata> {
+	pub async fn fetch_track_page(&self) -> Option<(TrackMetadata, TrackSoundPointer)> {
 		let response = reqwest::get(self.to_url()).await.ok()?;
 		let html = response.text().await.ok()?;
 
-		TrackMetadata::from_html(&html)
+		let meta = TrackMetadata::from_html(&html)?;
+		let sound = TrackSoundPointer::from_html(&html)?;
+
+		Some((meta, sound))
+	}
+}
+
+impl From<SoundgasmAudioTrackRow> for TrackPointer {
+	fn from(row: SoundgasmAudioTrackRow) -> Self {
+		Self {
+			profile_slug: row.profile_slug,
+			track_slug: row.track_slug,
+		}
 	}
 }
 
 lazy_static! {
 	static ref TRACK_URL_RE: Regex = Regex::new(
 		format!(
-			"//(?:www.)?soundgasm.net/u/([{}]+?)/([{}]+?)/",
+			"//(?:www.)?soundgasm.net/u/([{}]+)/([{}]+)/?",
 			PROFILE_SLUG_PATTERN, TRACK_SLUG_PATTERN
 		)
 		.as_str()
@@ -65,53 +67,59 @@ lazy_static! {
 
 #[cfg(test)]
 mod tests {
-	use super::*;
+	use super::TrackPointer;
 
 	#[test]
-	fn test_parse_track_url_info() {
+	fn test_parse_track_pointer() {
+		// With subdomain
 		let track_info = TrackPointer::from_url(
-			&"//www.soundgasm.net/u/sgdl-test/shopping-mall-half-open-Netherlands-207-AM-161001_0998",
+			"https://www.soundgasm.net/u/sgdl-test/shopping-mall-half-open-Netherlands-207-AM-161001_0998",
 		)
 		.unwrap();
-		assert_eq!(track_info.profile.slug, "sgdl-test");
+		assert_eq!(track_info.profile_slug, "sgdl-test");
 		assert_eq!(
-			track_info.slug,
+			track_info.track_slug,
 			"shopping-mall-half-open-Netherlands-207-AM-161001_0998"
 		);
 
-		// Without schema
-		let track_info =
-			TrackPointer::from_url(&"//www.soundgasm.net/u/!@#$$^&*()_+/!@#$^&*()_+").unwrap();
-		assert_eq!(track_info.profile.slug, "!@#$$^&*()_+");
-		assert_eq!(track_info.slug, "!@#$^&*()_+");
-
-		// Without schema or subdomain
+		// Without subdomain and schema
 		let track_info = TrackPointer::from_url(
-			&"//soundgasm.net/u/sgdl-test/shopping-mall-half-open-Netherlands-207-AM-161001_0998",
+			"//soundgasm.net/u/sgdl-test/shopping-mall-half-open-Netherlands-207-AM-161001_0998",
 		)
 		.unwrap();
-		assert_eq!(track_info.profile.slug, "/sgdl-test");
+		assert_eq!(track_info.profile_slug, "sgdl-test");
 		assert_eq!(
-			track_info.slug,
+			track_info.track_slug,
+			"shopping-mall-half-open-Netherlands-207-AM-161001_0998"
+		);
+
+		// With trailing slash
+		let track_info = TrackPointer::from_url(
+			"//soundgasm.net/u/sgdl-test/shopping-mall-half-open-Netherlands-207-AM-161001_0998/",
+		)
+		.unwrap();
+		assert_eq!(track_info.profile_slug, "sgdl-test");
+		assert_eq!(
+			track_info.track_slug,
 			"shopping-mall-half-open-Netherlands-207-AM-161001_0998"
 		);
 	}
 
 	#[test]
-	fn test_parse_invalid_track_url() {
+	fn test_parse_invalid_track_pointer() {
 		// Not even a URL
-		let track_info = TrackPointer::from_url(&"invalid_url");
+		let track_info = TrackPointer::from_url("invalid_url");
 		assert!(track_info.is_none());
 
 		// Close, but wrong tld
 		let track_info = TrackPointer::from_url(
-			&"//soundgasm.com/u/sgdl-test/shopping-mall-half-open-Netherlands-207-AM-161001_0998",
+			"//soundgasm.com/u/sgdl-test/shopping-mall-half-open-Netherlands-207-AM-161001_0998",
 		);
 		assert!(track_info.is_none());
 
 		// Wrong subdomain
 		let track_info = TrackPointer::from_url(
-			&"//dfs.soundgasm.net/u/sgdl-test/shopping-mall-half-open-Netherlands-207-AM-161001_0998",
+			"//dfs.soundgasm.net/u/sgdl-test/shopping-mall-half-open-Netherlands-207-AM-161001_0998",
 		);
 		assert!(track_info.is_none());
 	}

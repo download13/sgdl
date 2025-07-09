@@ -1,3 +1,4 @@
+#[derive(Debug, Clone)]
 enum ProviderDomain {
 	Kemono,
 	Coomer,
@@ -20,6 +21,7 @@ impl ProviderDomain {
 	}
 }
 
+#[derive(Debug, Clone)]
 pub struct PostPointer {
 	pub creator: ProfilePointer,
 	pub post_id: String,
@@ -48,10 +50,11 @@ impl PostPointer {
 	}
 
 	pub fn to_url(&self) -> String {
-		format!("{}/post/{}", self.creator.to_url(), self.post_id);
+		format!("{}/post/{}", self.creator.to_url(), self.post_id).to_string()
 	}
 }
 
+#[derive(Debug, Clone)]
 pub struct ProfilePointer {
 	pub provider_domain: ProviderDomain,
 	pub service_slug: String,

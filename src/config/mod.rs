@@ -14,7 +14,7 @@ lazy_static! {
 	static ref SERVER_HOST: String = test::init_test_server();
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct Config {
 	version: u64,
 	pub data_path: PathBuf,
@@ -48,7 +48,7 @@ impl Config {
 			std::fs::create_dir_all(&data_path).unwrap();
 		}
 
-		data_path
+		data_path.clone()
 	}
 
 	#[cfg(not(test))]

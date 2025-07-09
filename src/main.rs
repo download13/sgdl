@@ -1,15 +1,24 @@
+#![feature(macro_metavar_expr_concat)]
+
 mod commands;
 mod common;
 mod config;
+mod file_store;
+mod macros;
 mod media_sources;
 mod media_types;
-mod store;
+mod schema;
 
 use clap::{Parser, Subcommand};
 use config::Config;
+use diesel::prelude::*;
+use diesel::SqliteConnection;
+use diesel_migrations::{embed_migrations, EmbeddedMigrations, MigrationHarness};
+use std::path::Path;
 use std::path::PathBuf;
-use store::Store;
 use Commands::*;
+
+use file_store::FileStore;
 
 #[derive(Parser, Debug)]
 #[command(name = "sgdl")]
@@ -31,21 +40,28 @@ enum Commands {
 		/// URL or other indicator of media to scan
 		media_string: String,
 	},
-
-	#[command(arg_required_else_help = true)]
-	Ensure {
-		/// URL or other indicator of media to ensure is downloaded
-		media_string: String,
-	},
 }
 
 pub struct Context {
 	pub config: Config,
-	pub store: Store,
+	pub conn: SqliteConnection,
+	pub file_store: FileStore,
+}
+
+impl Clone for Context {
+	fn clone(&self) -> Self {
+		Self {
+			config: self.config.clone(),
+			conn: establish_connection(self.file_store.data_path.as_path()),
+			file_store: self.file_store.clone(),
+		}
+	}
 }
 
 #[tokio::main]
 async fn main() {
+	simple_logger::SimpleLogger::new().env().init().unwrap();
+
 	let Ok(config) = confy::load::<Config>("sgdl", None) else {
 		eprintln!("Error loading config");
 		return;
@@ -55,20 +71,24 @@ async fn main() {
 
 	let data_path = match cli.data_path {
 		Some(data_path) => data_path,
-		None => config.data_path.clone().into(),
+		None => config.data_path.clone(),
 	};
 
-	let cmd = cli.command.unwrap();
-
-	let store = match Store::new(&data_path).await {
-		Ok(store) => store,
-		Err(err) => {
-			eprintln!("Error initializing store: {:?}", err);
+	let cmd = match cli.command {
+		Some(cmd) => cmd,
+		None => {
+			println!("No command provided. Use --help for usage information.");
 			return;
 		}
 	};
 
-	let mut context = Context { config, store };
+	let file_store = FileStore::new(&data_path).await;
+
+	let mut context = Context {
+		config,
+		file_store,
+		conn: establish_connection(&data_path),
+	};
 
 	// TODO: Tagging system
 	// TODO: gwasi support
@@ -82,7 +102,7 @@ async fn main() {
 		// 	commands::ensure_command(&mut context, media_string).await;
 		// }
 		_ => (),
-	}
+	};
 }
 
 async fn display_progress(total: u64, downloaded: u64) {
@@ -91,4 +111,35 @@ async fn display_progress(total: u64, downloaded: u64) {
 		"Downloaded: {} of {} bytes ({:.2}%)",
 		downloaded, total, percentage
 	);
+}
+
+pub const MIGRATIONS: EmbeddedMigrations = embed_migrations!("migrations");
+
+fn establish_connection(data_path: &Path) -> SqliteConnection {
+	let audio_path = data_path.join("audio");
+	if !audio_path.exists() {
+		std::fs::create_dir_all(&audio_path).unwrap();
+	}
+
+	let database_path = data_path.join("data");
+	if !database_path.exists() {
+		std::fs::create_dir_all(&database_path).unwrap();
+	}
+
+	let database_path = database_path.join("meta.sqlite3");
+
+	let mut conn =
+		SqliteConnection::establish(database_path.to_str().unwrap()).unwrap_or_else(|err| {
+			println!("Error connecting to {err:?}");
+			panic!("Error connecting to {}", database_path.display());
+		});
+
+	conn
+		.run_pending_migrations(MIGRATIONS)
+		.unwrap_or_else(|err| {
+			println!("Error running migrations: {err:?}");
+			panic!("Error running migrations");
+		});
+
+	conn
 }

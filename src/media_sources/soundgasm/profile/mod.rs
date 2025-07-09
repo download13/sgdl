@@ -4,15 +4,12 @@ use lazy_static::lazy_static;
 use log::debug;
 use regex::Regex;
 
-pub use pointer::ProfilePointer;
+use super::track::{TrackMetadata, TrackPointer, TRACK_SLUG_PATTERN};
 
-use crate::media_sources::soundgasm::{
-	track::{TrackMetadata, TRACK_SLUG_PATTERN},
-	TrackPointer,
-};
+pub use pointer::{ProfilePointer, PROFILE_SLUG_PATTERN};
 
 pub struct Profile {
-	pointer: ProfilePointer,
+	profile_slug: String,
 	tracks: Vec<ProfileTrackListing>,
 }
 
@@ -65,14 +62,14 @@ impl Profile {
 		}
 
 		Some(Self {
-			pointer: track_listings.get(0).unwrap().pointer.profile.clone(),
+			profile_slug: track_listings.get(0).unwrap().pointer.profile_slug.clone(),
 			tracks: track_listings,
 		})
 	}
 
 	pub fn new(slug: String, tracks: Vec<ProfileTrackListing>) -> Self {
 		Self {
-			pointer: ProfilePointer::new(&slug),
+			profile_slug: slug,
 			tracks,
 		}
 	}

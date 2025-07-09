@@ -1,4 +1,4 @@
-use crate::media_sources::MediaSource;
+use crate::media_sources::ProviderType;
 
 pub enum MediaType {
 	Audio = 0,
@@ -21,8 +21,18 @@ pub enum MediaType {
 // KemonoPage -> Vec<KemonoPost>
 // KemonoPost -> Vec<MediaItem>
 
+pub trait TrackListing {
+	fn get_provider(&self) -> ProviderType;
+	fn get_source(&self) -> ProviderType;
+	fn get_type() -> MediaType;
+
+	async fn try_download(&self) -> bool;
+	async fn verify_metadata(&self) -> bool;
+	async fn verify_blob(&self) -> bool;
+}
+
 pub trait MediaItem {
-	fn get_source(&self) -> MediaSource;
+	fn get_source(&self) -> ProviderType;
 	fn get_type() -> MediaType;
 
 	async fn try_download(&self) -> bool;
