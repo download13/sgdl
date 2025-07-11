@@ -29,13 +29,7 @@ pub async fn scan_command(media_string: String, context: &mut Context) {
 
 			let profile_pointer = ProfilePointer::from(track.pointer);
 
-			let profile = profile_pointer.fetch_profile().await;
-
-			if let Err(err) = profile.add_to_library(context).await {
-				info!("Failed to add profile to library: {:?}", err);
-			} else {
-				info!("Profile added to library successfully");
-			}
+			profile_pointer.scan(context).await;
 		}
 		Some(PointerType::SoundgasmProfile(profile)) => {
 			// Handle Soundgasm profile logic

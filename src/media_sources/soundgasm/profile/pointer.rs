@@ -1,4 +1,5 @@
 use lazy_static::lazy_static;
+use log::info;
 use regex::Regex;
 
 use super::super::track::TrackPointer;
@@ -8,7 +9,7 @@ pub const PROFILE_SLUG_PATTERN: &str = "a-zA-Z0-9_-";
 
 #[derive(Debug, Clone)]
 pub struct ProfilePointer {
-	slug: String,
+	pub slug: String,
 }
 
 impl ProfilePointer {
@@ -17,6 +18,19 @@ impl ProfilePointer {
 		let slug = profile_matches.get(1)?.as_str().to_string();
 
 		Some(Self { slug })
+	}
+
+	pub async fn scan(&self, context: &mut crate::Context) {
+		let Some(profile) = self.fetch_profile().await else {
+			info!("Failed to fetch Soundgasm profile for track: {}", self.slug);
+			return;
+		};
+
+		if let Err(err) = profile.add_to_library(context).await {
+			info!("Failed to add profile to library: {:?}", err);
+		} else {
+			info!("Profile added to library successfully");
+		}
 	}
 
 	pub fn from_url(url: &str) -> Option<Self> {
@@ -31,7 +45,7 @@ impl ProfilePointer {
 	}
 
 	pub async fn fetch_profile(&self) -> Option<Profile> {
-		let profile_html = fetch_text(self.get_url()).await.ok()?;
+		let profile_html = fetch_text(self.get_url()).await?;
 
 		Some(Profile::from_html(&profile_html)?)
 	}

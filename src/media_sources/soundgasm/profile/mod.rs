@@ -4,74 +4,91 @@ use lazy_static::lazy_static;
 use log::debug;
 use regex::Regex;
 
-use super::track::{TrackMetadata, TrackPointer, TRACK_SLUG_PATTERN};
+use super::track::{SoundgasmAudioTrack, TrackMetadata, TrackPointer, TRACK_SLUG_PATTERN};
 
 pub use pointer::{ProfilePointer, PROFILE_SLUG_PATTERN};
 
 pub struct Profile {
-	profile_slug: String,
-	tracks: Vec<ProfileTrackListing>,
+	pub slug: String,
+	pub tracks: Vec<ProfileTrackListing>,
 }
 
 impl Profile {
 	pub fn from_html(profile_page_html: &str) -> Option<Self> {
-		let Some(sections) = TRACK_SECTION_RE.captures(profile_page_html) else {
-			debug!("Failed to capture track sections");
-			return None;
-		};
+		let sections_iter = TRACK_SECTION_RE.captures_iter(profile_page_html);
 
-		let mut track_listings = Vec::with_capacity(sections.len());
+		let mut tracks = Vec::new();
 
-		for section in sections.iter() {
-			let section_html = match section {
-				Some(s) => s.as_str(),
-				None => {
-					debug!("Failed to capture section HTML");
-					continue;
-				}
-			};
+		for section_capture in sections_iter {
+			let (_, [section_html]) = section_capture.extract();
 
-			let Some(track_url_section) = TRACK_URL_RE.captures(section_html) else {
-				debug!("Failed to capture track URL section");
+			let Some(track_url_and_title) = TRACK_URL_AND_TITLE_RE.captures(section_html) else {
+				debug!("Failed to capture track URL and title");
 				continue;
 			};
 
-			let Some(track_url) = track_url_section.get(1) else {
-				debug!("Failed to capture track URL");
-				continue;
-			};
+			let (_, [url, title]) = track_url_and_title.extract();
 
-			let Some(metadata) = TrackMetadata::from_html(section_html) else {
-				debug!("Failed to capture track URL");
-				continue;
-			};
-
-			let Some(track_pointer) = TrackPointer::from_url(track_url.as_str()) else {
+			let Some(pointer) = TrackPointer::from_url(url) else {
 				continue; // Skip if track URL is invalid
 			};
 
-			track_listings.push(ProfileTrackListing {
-				pointer: track_pointer,
-				metadata,
-			});
+			let Some(description_capture) = TRACK_DESCRIPTION_RE.captures(section_html) else {
+				debug!("Failed to capture track description");
+				continue;
+			};
+
+			let (_, [description]) = description_capture.extract();
+
+			let metadata = TrackMetadata {
+				title: title.to_string(),
+				description: description.to_string(),
+			};
+
+			tracks.push(ProfileTrackListing { pointer, metadata });
 		}
 
-		if track_listings.is_empty() {
+		if tracks.is_empty() {
 			debug!("No valid track listings found in profile page HTML");
 			return None;
 		}
 
 		Some(Self {
-			profile_slug: track_listings.get(0).unwrap().pointer.profile_slug.clone(),
-			tracks: track_listings,
+			slug: tracks.first().unwrap().pointer.profile_slug.clone(),
+			tracks,
 		})
 	}
 
-	pub fn new(slug: String, tracks: Vec<ProfileTrackListing>) -> Self {
-		Self {
-			profile_slug: slug,
-			tracks,
+	pub async fn add_to_library(&self, context: &mut crate::Context) -> Result<(), ()> {
+		// TODO: add profile to profiles table
+		debug!("Adding profile {} to library", self.slug);
+		let profile_pointer = ProfilePointer {
+			slug: self.slug.clone(),
+		};
+
+		// TODO: Add tracks to soundgasm_tracks table
+		for track in &self.tracks {
+			let track_pointer = &track.pointer;
+			let track_metadata = &track.metadata;
+
+			debug!(
+				"Adding track {} to profile {}",
+				track_pointer.track_slug, self.slug
+			);
+
+			let sound_pointer = track_pointer.fetch_track_page().await;
+			if let Some((metadata, sound)) = sound_pointer {
+				let audio_track =
+					SoundgasmAudioTrack::from_track_page(track_pointer.clone(), metadata, sound);
+				audio_track.add_to_library(context).await;
+			} else {
+				debug!(
+					"Failed to fetch sound pointer for track {}",
+					track_pointer.track_slug
+				);
+			}
 		}
+		Err(())
 	}
 }
 
@@ -81,16 +98,39 @@ pub struct ProfileTrackListing {
 }
 
 lazy_static! {
-	static ref TRACK_SECTION_RE: Regex = Regex::new(
-		format!(
-			"<div class=\"sound-details\">([{}]+?)</div>",
-			TRACK_SLUG_PATTERN
-		)
-		.as_str()
-	)
-	.unwrap();
-	static ref TRACK_URL_RE: Regex = Regex::new("<a href=\"(.+?)\"").unwrap();
-	static ref TRACK_TITLE_RE: Regex = Regex::new("<a href=\"(?:.+?)\">(.+?)</a>").unwrap();
+	static ref TRACK_SECTION_RE: Regex =
+		Regex::new("<div class=\"sound-details\">(.+?)</div>").unwrap();
+	static ref TRACK_URL_AND_TITLE_RE: Regex = Regex::new("<a href=\"(.+?)\">(.+?)</a>").unwrap();
 	static ref TRACK_DESCRIPTION_RE: Regex =
 		Regex::new("<span class=\"soundDescription\">(.+?)</span>").unwrap();
+}
+
+#[cfg(test)]
+mod tests {
+	use super::Profile;
+
+	#[test]
+	fn test_parse_profile_from_html() {
+		let profile_html =
+			include_str!("../../../../test/fixtures/http/soundgasm/profiles/sgdl-test/index.html");
+
+		// With subdomain
+		let profile = Profile::from_html(profile_html).unwrap();
+		assert_eq!(profile.slug, "sgdl-test");
+		assert_eq!(profile.tracks.len(), 1);
+
+		assert_eq!(profile.tracks[0].pointer.profile_slug, "sgdl-test");
+		assert_eq!(
+			profile.tracks[0].pointer.track_slug,
+			"shopping-mall-half-open-Netherlands-207-AM-161001_0998"
+		);
+		assert_eq!(
+			profile.tracks[0].metadata.title,
+			"shopping mall half open Netherlands 207 AM 161001_0998"
+		);
+		assert_eq!(
+			profile.tracks[0].metadata.description,
+			"Test audio from https://freesound.org/people/klankbeeld/sounds/808487/"
+		);
+	}
 }

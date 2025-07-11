@@ -10,10 +10,10 @@ lazy_static! {
 	};
 }
 
-pub async fn fetch_text(url: String) -> Result<String, Error> {
-	CLIENT.get(url).send().await?.text().await
+pub async fn fetch_text(url: String) -> Option<String> {
+	CLIENT.get(url).send().await.ok()?.text().await.ok()
 }
 
-pub async fn stream_bytes(url: String) -> Result<reqwest::Response, Error> {
-	CLIENT.get(url).send().await
+pub async fn stream_bytes(url: String) -> Option<reqwest::Response> {
+	CLIENT.get(url).send().await.ok()
 }
