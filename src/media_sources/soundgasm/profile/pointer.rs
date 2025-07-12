@@ -20,17 +20,18 @@ impl ProfilePointer {
 		Some(Self { slug })
 	}
 
-	pub async fn scan(&self, context: &mut crate::Context) {
-		let Some(profile) = self.fetch_profile().await else {
-			info!("Failed to fetch Soundgasm profile for track: {}", self.slug);
-			return;
-		};
+	pub async fn scan(&self, context: &mut crate::Context) -> Result<String, String> {
+		let profile = self.fetch_profile().await.or(Err(format!(
+			"Failed to fetch Soundgasm profile for track: {}",
+			self.slug
+		)))?;
 
-		if let Err(err) = profile.add_to_library(context).await {
-			info!("Failed to add profile to library: {:?}", err);
-		} else {
-			info!("Profile added to library successfully");
-		}
+		profile
+			.add_to_library(context)
+			.await
+			.map_err(|err| format!("Failed to add profile to library: {}", err))?;
+
+		Ok("Profile added to library successfully".to_string())
 	}
 
 	pub fn from_url(url: &str) -> Option<Self> {
@@ -44,10 +45,15 @@ impl ProfilePointer {
 		format!("https://soundgasm.net/u/{}", self.slug)
 	}
 
-	pub async fn fetch_profile(&self) -> Option<Profile> {
-		let profile_html = fetch_text(self.get_url()).await?;
+	pub async fn fetch_profile(&self) -> Result<Profile, String> {
+		let profile_html = fetch_text(self.get_url()).await.map_err(|err| {
+			format!(
+				"Failed to fetch Soundgasm profile page: {}\nError: {}",
+				self.slug, err
+			)
+		})?;
 
-		Some(Profile::from_html(&profile_html)?)
+		Profile::from_html(&profile_html)
 	}
 }
 

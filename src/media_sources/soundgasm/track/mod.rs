@@ -4,13 +4,13 @@ mod row;
 mod sound_pointer;
 mod stored_audio;
 
-use log::info;
+use log::debug;
 
 pub use metadata::TrackMetadata;
 pub use pointer::{TrackPointer, TRACK_SLUG_PATTERN};
 pub use row::SoundgasmAudioTrackRow;
 
-use crate::{media_sources::soundgasm::ProfilePointer, Context};
+use crate::Context;
 use sound_pointer::TrackSoundPointer;
 use stored_audio::SoundgasmTrackAudio;
 
@@ -23,7 +23,7 @@ pub struct SoundgasmAudioTrack {
 }
 
 impl SoundgasmAudioTrack {
-	pub fn from_track_page(
+	pub fn new(
 		pointer: TrackPointer,
 		metadata: TrackMetadata,
 		sound_pointer: TrackSoundPointer,
@@ -44,9 +44,9 @@ impl SoundgasmAudioTrack {
 		let result = row.add_to_library(context).await;
 
 		if let Some(updated_row) = result {
-			info!("Track metadata upserted successfully: {:?}", updated_row);
+			debug!("Track metadata upserted successfully: {:?}", updated_row);
 		} else {
-			info!("Failed to upsert track metadata");
+			debug!("Failed to upsert track metadata");
 		};
 	}
 }

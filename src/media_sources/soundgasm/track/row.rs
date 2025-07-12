@@ -1,5 +1,5 @@
 use diesel::prelude::*;
-use log::info;
+use log::debug;
 
 // use crate::generate_update_type;
 use super::SoundgasmAudioTrack;
@@ -61,11 +61,11 @@ impl SoundgasmAudioTrackRow {
 
 		match result {
 			Ok(updated_row) => {
-				info!("Track metadata upserted successfully: {:?}", updated_row);
+				debug!("Track metadata upserted successfully: {:?}", updated_row);
 				Some(updated_row)
 			}
 			Err(err) => {
-				info!("Failed to upsert track metadata: {:?}", err);
+				debug!("Failed to upsert track metadata: {:?}", err);
 				None
 			}
 		}

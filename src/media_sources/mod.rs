@@ -29,7 +29,7 @@ pub enum PointerType {
 // }
 
 pub fn recognize_pointer_from_string(media_string: &str) -> Option<PointerType> {
-	if let Some(sg_track_pointer) = soundgasm::TrackPointer::from_url(media_string) {
+	if let Ok(sg_track_pointer) = soundgasm::TrackPointer::from_url(media_string) {
 		return Some(PointerType::SoundgasmTrack(sg_track_pointer));
 	}
 

@@ -14,7 +14,7 @@ pub struct Profile {
 }
 
 impl Profile {
-	pub fn from_html(profile_page_html: &str) -> Option<Self> {
+	pub fn from_html(profile_page_html: &str) -> Result<Self, String> {
 		let sections_iter = TRACK_SECTION_RE.captures_iter(profile_page_html);
 
 		let mut tracks = Vec::new();
@@ -29,7 +29,7 @@ impl Profile {
 
 			let (_, [url, title]) = track_url_and_title.extract();
 
-			let Some(pointer) = TrackPointer::from_url(url) else {
+			let Ok(pointer) = TrackPointer::from_url(url) else {
 				continue; // Skip if track URL is invalid
 			};
 
@@ -49,46 +49,37 @@ impl Profile {
 		}
 
 		if tracks.is_empty() {
-			debug!("No valid track listings found in profile page HTML");
-			return None;
+			return Err(format!(
+				"No valid track listings found in profile page HTML"
+			));
 		}
 
-		Some(Self {
+		Ok(Self {
 			slug: tracks.first().unwrap().pointer.profile_slug.clone(),
 			tracks,
 		})
 	}
 
-	pub async fn add_to_library(&self, context: &mut crate::Context) -> Result<(), ()> {
-		// TODO: add profile to profiles table
-		debug!("Adding profile {} to library", self.slug);
-		let profile_pointer = ProfilePointer {
-			slug: self.slug.clone(),
-		};
-
-		// TODO: Add tracks to soundgasm_tracks table
+	pub async fn add_to_library(&self, context: &mut crate::Context) -> Result<(), String> {
 		for track in &self.tracks {
 			let track_pointer = &track.pointer;
-			let track_metadata = &track.metadata;
-
 			debug!(
 				"Adding track {} to profile {}",
 				track_pointer.track_slug, self.slug
 			);
 
-			let sound_pointer = track_pointer.fetch_track_page().await;
-			if let Some((metadata, sound)) = sound_pointer {
-				let audio_track =
-					SoundgasmAudioTrack::from_track_page(track_pointer.clone(), metadata, sound);
-				audio_track.add_to_library(context).await;
-			} else {
-				debug!(
+			let Some((metadata, sound_pointer)) = track_pointer.fetch_track_page().await else {
+				return Err(format!(
 					"Failed to fetch sound pointer for track {}",
 					track_pointer.track_slug
-				);
-			}
+				));
+			};
+
+			let audio_track = SoundgasmAudioTrack::new(track_pointer.clone(), metadata, sound_pointer);
+			audio_track.add_to_library(context).await;
 		}
-		Err(())
+
+		Ok(())
 	}
 }
 

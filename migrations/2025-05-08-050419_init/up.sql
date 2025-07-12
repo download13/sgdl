@@ -1,14 +1,3 @@
--- SQLite
-CREATE TABLE `soundgasm_profiles`(
-	`slug` TEXT NOT NULL,
-	`name` TEXT NOT NULL,
-	`created_at` DATETIME NOT NULL,
-	`updated_at` DATETIME NOT NULL,
-	`deleted_at` DATETIME,
-	PRIMARY KEY(`slug`)
-);
-CREATE INDEX `idx_soundgasm_profiles_slug` ON `soundgasm_profiles`(`slug`);
-
 CREATE TABLE `soundgasm_tracks`(
 	`profile_slug` TEXT NOT NULL,
 	`track_slug` TEXT NOT NULL,

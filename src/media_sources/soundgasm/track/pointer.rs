@@ -15,16 +15,25 @@ pub struct TrackPointer {
 }
 
 impl TrackPointer {
-	pub fn from_url(url: &str) -> Option<Self> {
-		TRACK_URL_RE.captures(url).map(|caps| {
-			let profile_slug = caps.get(1)?;
-			let track_slug = caps.get(2)?;
+	pub fn from_url(url: &str) -> Result<Self, String> {
+		let captures = TRACK_URL_RE.captures(url);
 
-			Some(Self {
-				profile_slug: profile_slug.as_str().to_string(),
-				track_slug: track_slug.as_str().to_string(),
-			})
-		})?
+		match captures {
+			Some(caps) => {
+				let profile_slug = caps
+					.get(1)
+					.ok_or(format!("Invalid profile slug in URL: {}", url))?;
+				let track_slug = caps
+					.get(2)
+					.ok_or(format!("Invalid track slug in URL: {}", url))?;
+
+				Ok(Self {
+					profile_slug: profile_slug.as_str().to_string(),
+					track_slug: track_slug.as_str().to_string(),
+				})
+			}
+			None => Err("Unable to parse track pointer from URL".to_string()),
+		}
 	}
 
 	pub fn to_url(&self) -> String {
@@ -109,18 +118,18 @@ mod tests {
 	fn test_parse_invalid_track_pointer() {
 		// Not even a URL
 		let track_info = TrackPointer::from_url("invalid_url");
-		assert!(track_info.is_none());
+		assert!(track_info.is_err());
 
 		// Close, but wrong tld
 		let track_info = TrackPointer::from_url(
 			"//soundgasm.com/u/sgdl-test/shopping-mall-half-open-Netherlands-207-AM-161001_0998",
 		);
-		assert!(track_info.is_none());
+		assert!(track_info.is_err());
 
 		// Wrong subdomain
 		let track_info = TrackPointer::from_url(
 			"//dfs.soundgasm.net/u/sgdl-test/shopping-mall-half-open-Netherlands-207-AM-161001_0998",
 		);
-		assert!(track_info.is_none());
+		assert!(track_info.is_err());
 	}
 }

@@ -1,4 +1,4 @@
-use log::info;
+use log::{error, info};
 
 use crate::media_sources::soundgasm::{ProfilePointer, SoundgasmAudioTrack};
 use crate::media_sources::{recognize_pointer_from_string, PointerType};
@@ -22,18 +22,29 @@ pub async fn scan_command(media_string: String, context: &mut Context) {
 				return;
 			};
 
-			let track = SoundgasmAudioTrack::from_track_page(track_pointer, metadata, sound_pointer);
+			let track = SoundgasmAudioTrack::new(track_pointer, metadata, sound_pointer);
 
 			track.add_to_library(context).await;
 			info!("Added Soundgasm track to library: {}", media_string);
 
 			let profile_pointer = ProfilePointer::from(track.pointer);
 
-			profile_pointer.scan(context).await;
+			let scan_result = profile_pointer.scan(context).await;
+
+			match scan_result {
+				Ok(message) => info!("{}", message),
+				Err(err) => info!("Error scanning profile: {}", err),
+			};
 		}
-		Some(PointerType::SoundgasmProfile(profile)) => {
-			// Handle Soundgasm profile logic
-			info!("Scanning Soundgasm profile: {:?}", profile);
+		Some(PointerType::SoundgasmProfile(pointer)) => {
+			info!("Scanning Soundgasm profile: {}", pointer.slug);
+
+			let scan_result = pointer.scan(context).await;
+
+			match scan_result {
+				Ok(msg) => info!("{}", msg),
+				Err(err) => error!("Failed to add profile to library: {}", err),
+			};
 		}
 		Some(PointerType::KemonoPost(post)) => {
 			// Handle Kemono specific logic
