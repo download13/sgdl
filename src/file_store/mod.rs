@@ -1,13 +1,10 @@
 mod media_blob;
 
 use diesel::prelude::*;
-use log::{error, info};
 use std::path::{Path, PathBuf};
-use tokio::fs::{create_dir_all, File};
-use tokio::io::AsyncReadExt;
-use xxhash_rust::xxh3::Xxh3;
+use tokio::fs::create_dir_all;
 
-use media_blob::MediaBlob;
+pub use media_blob::MediaBlob;
 
 define_sql_function! {
 	fn current_timestamp() -> Timestamp;
@@ -55,77 +52,6 @@ impl FileStore {
 	// }
 
 	// TODO: Convert the print messages and failures to some kind of stream or progress reporting
-	async fn verify_file(&self, blob: &dyn MediaBlob) -> bool {
-		let file_path = blob.get_path();
-		if !file_path.is_file() {
-			return false;
-		}
-
-		let Ok(mut file) = File::open(&file_path).await else {
-			return false;
-		};
-
-		let Ok(metadata) = file.metadata().await else {
-			return false;
-		};
-
-		if !metadata.is_file() {
-			info!("Path is not a file: {}", file_path.display());
-			return false;
-		}
-
-		let Some(content_length) = blob.get_content_length() else {
-			info!(
-				"Content length is missing for blob: {}",
-				file_path.display()
-			);
-			return false;
-		};
-
-		if metadata.len() != content_length as u64 {
-			error!("File size mismatch");
-			error!("Expected: {}", content_length);
-			error!("Actual: {}", metadata.len());
-			return false;
-		}
-
-		let Some(content_hash) = blob.get_content_hash() else {
-			info!("Content hash is missing for blob: {}", file_path.display());
-			return false;
-		};
-
-		let mut buffer = vec![0; 8192];
-		let mut hasher = Xxh3::new();
-
-		loop {
-			let Ok(bytes_read) = file.read(&mut buffer).await else {
-				break;
-			};
-
-			if bytes_read == 0 {
-				break;
-			}
-
-			hasher.update(&buffer[..bytes_read]);
-			// TODO: Report progress with indicitif
-		}
-
-		let hash = hasher.digest();
-		let hash_hex = format!("{:x}", hash);
-		if hash_hex != *content_hash {
-			error!("File hash mismatch");
-			error!("Expected: {:?}", content_hash);
-			error!("Actual: {}", hash_hex);
-			return false;
-		}
-
-		info!("File verified successfully");
-		info!("File path: {}", file_path.display());
-		info!("File hash: {}", hash_hex);
-		info!("File size: {}", metadata.len());
-
-		true
-	}
 
 	// pub async fn stream_response_to_track(
 	// 	&self,

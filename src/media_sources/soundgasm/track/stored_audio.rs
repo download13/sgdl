@@ -6,7 +6,7 @@ pub struct SoundgasmTrackAudio {
 	pub content_length: Option<i64>,
 }
 
-impl From<SoundgasmAudioTrackRow> for SoundgasmTrackAudio {
+impl SoundgasmTrackAudio {
 	fn from(track: SoundgasmAudioTrackRow) -> Self {
 		Self {
 			content_hash: track.content_hash,

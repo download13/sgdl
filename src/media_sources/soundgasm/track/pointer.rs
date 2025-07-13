@@ -2,8 +2,11 @@ use lazy_static::lazy_static;
 use regex::Regex;
 
 use super::sound_pointer::TrackSoundPointer;
-use crate::media_sources::soundgasm::{
-	profile::PROFILE_SLUG_PATTERN, track::TrackMetadata, SoundgasmAudioTrackRow,
+use crate::{
+	media_sources::soundgasm::{
+		profile::PROFILE_SLUG_PATTERN, track::TrackMetadata, SoundgasmAudioTrackRow,
+	},
+	media_types::{MediaItem, MediaMetadata, MediaPointer},
 };
 
 pub const TRACK_SLUG_PATTERN: &str = "a-zA-Z0-9_-";
@@ -60,6 +63,16 @@ impl From<SoundgasmAudioTrackRow> for TrackPointer {
 			profile_slug: row.profile_slug,
 			track_slug: row.track_slug,
 		}
+	}
+}
+
+impl MediaPointer for TrackPointer {
+	async fn fetch_metadata(&self) -> Vec<impl MediaMetadata> {
+		let Some((metadata, sound_pointer)) = self.fetch_track_page().await else {
+			return vec![];
+		};
+
+		sound_pointer.
 	}
 }
 

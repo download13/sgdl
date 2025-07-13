@@ -4,7 +4,7 @@ use lazy_static::lazy_static;
 use log::debug;
 use regex::Regex;
 
-use super::track::{SoundgasmAudioTrack, TrackMetadata, TrackPointer, TRACK_SLUG_PATTERN};
+use super::track::{SoundgasmAudioTrack, TrackMetadata, TrackPointer};
 
 pub use pointer::{ProfilePointer, PROFILE_SLUG_PATTERN};
 

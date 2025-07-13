@@ -1,5 +1,3 @@
-use self::soundgasm::TrackPointer;
-
 mod kemono;
 pub mod soundgasm;
 
@@ -12,7 +10,7 @@ pub enum ProviderType {
 }
 
 pub enum PointerType {
-	SoundgasmTrack(TrackPointer),
+	SoundgasmTrack(soundgasm::TrackPointer),
 	SoundgasmProfile(soundgasm::ProfilePointer),
 	KemonoPost(kemono::PostPointer),
 	KemonoProfile(kemono::ProfilePointer),

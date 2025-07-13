@@ -1,4 +1,4 @@
-use crate::media_sources::ProviderType;
+use crate::{file_store::MediaBlob, media_sources::ProviderType};
 
 pub enum MediaType {
 	Audio = 0,
@@ -9,9 +9,8 @@ pub enum MediaType {
 }
 
 // Things you can do with each media source:
-// Scan SG Profile -> Add profile to library
-// Scan KemonoProfile -> Add profile to library, add all posts to library
 // Add SG Track -> Add track to library
+// Scan KemonoProfile -> Add profile to library, add all posts to library
 // Add KemonoPost -> Add post to library, add all media items to library
 
 // Things you can get from a pointer:
@@ -21,21 +20,21 @@ pub enum MediaType {
 // KemonoPage -> Vec<KemonoPost>
 // KemonoPost -> Vec<MediaItem>
 
-pub trait TrackListing {
-	fn get_provider(&self) -> ProviderType;
-	fn get_source(&self) -> ProviderType;
-	fn get_type() -> MediaType;
+pub trait MediaPointer {
+	async fn fetch_metadata(&self) -> Vec<impl MediaMetadata>;
+	async fn fetch_blob_pointer(&self) -> Option<impl MediaBlob>;
+}
 
-	async fn try_download(&self) -> bool;
-	async fn verify_metadata(&self) -> bool;
-	async fn verify_blob(&self) -> bool;
+pub trait MediaMetadata {
+	async fn get_title(&self) -> String;
+	async fn get_description(&self) -> String;
 }
 
 pub trait MediaItem {
 	fn get_source(&self) -> ProviderType;
-	fn get_type() -> MediaType;
+	fn get_type(&self) -> MediaType;
+
+	fn get_pointer(&self) -> impl MediaPointer;
 
 	async fn try_download(&self) -> bool;
-	async fn verify_metadata(&self) -> bool;
-	async fn verify_blob(&self) -> bool;
 }

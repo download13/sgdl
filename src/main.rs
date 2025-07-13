@@ -20,6 +20,11 @@ use Commands::*;
 
 use file_store::FileStore;
 
+use crate::media_sources::soundgasm::SoundgasmAudioTrack;
+use crate::media_sources::ProviderType;
+use crate::media_types::MediaItem;
+use crate::media_types::MediaType;
+
 #[derive(Parser, Debug)]
 #[command(name = "sgdl")]
 #[command(version)]
@@ -40,12 +45,31 @@ enum Commands {
 		/// URL or other indicator of media to scan
 		media_string: String,
 	},
+	Tui,
 }
 
 pub struct Context {
 	pub config: Config,
 	pub conn: SqliteConnection,
 	pub file_store: FileStore,
+}
+
+impl Context {
+	async fn search(
+		&self,
+		query: &str,
+		filter_media_type: Option<MediaType>,
+		filter_provider_type: Option<ProviderType>,
+	) -> Vec<impl MediaItem> {
+		let results_vec = match filter_media_type {
+			Some(MediaType::Audio) => SoundgasmAudioTrack::search(self, query).await,
+			_ => SoundgasmAudioTrack::search(self, query).await,
+		};
+
+		let results = results_vec;
+
+		results
+	}
 }
 
 impl Clone for Context {
@@ -101,6 +125,9 @@ async fn main() {
 		// Ensure { media_string } => {
 		// 	commands::ensure_command(&mut context, media_string).await;
 		// }
+		Tui => {
+			commands::tui_command(&mut context).await;
+		}
 		_ => (),
 	};
 }

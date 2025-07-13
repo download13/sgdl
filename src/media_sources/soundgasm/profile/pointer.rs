@@ -1,5 +1,4 @@
 use lazy_static::lazy_static;
-use log::info;
 use regex::Regex;
 
 use super::super::track::TrackPointer;

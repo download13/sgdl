@@ -1,5 +1,9 @@
+use std::path::PathBuf;
+
 use lazy_static::lazy_static;
 use regex::Regex;
+
+use crate::file_store::MediaBlob;
 
 #[derive(Clone, Debug)]
 pub struct TrackSoundPointer {
@@ -35,6 +39,12 @@ impl TrackSoundPointer {
 			"https://media.soundgasm.net/sounds/{}.{}",
 			self.sound_id, self.file_extension
 		)
+	}
+}
+
+impl MediaBlob for TrackSoundPointer {
+	fn get_path(&self) -> PathBuf {
+		PathBuf::from(format!("soundgasm_audio/{}.{}", self.sound_id, self.file_extension).as_str())
 	}
 }
 

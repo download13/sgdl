@@ -10,6 +10,7 @@ async-fs = "2.1.2"
 chrono = "0.4.41"
 clap = { version = "4.5.37", features = ["derive"] }
 confy = "0.6.1"
+crossterm = "0.29.0"
 diesel = { version = "2.2.10", features = [
 	"sqlite",
 	"returning_clauses_for_sqlite_3_35",
@@ -22,9 +23,11 @@ lazy_static = "1.5.0"
 libsqlite3-sys = { version = "0.33.0", features = ["bundled"] }
 log = { version = "0.4.27", features = ["kv"] }
 path_macro = "1.0.0"
+ratatui = "0.29.0"
 regex = "1.11.1"
 reqwest = { version = "0.12.15", features = ["stream"] }
 serde = { version = "1.0.219", features = ["derive"] }
 simple_logger = "5.0.0"
 tokio = { version = "1.45.0", features = ["full"] }
+tui-input = { version = "0.14.0", features = ["ratatui"] }
 xxhash-rust = { version = "0.8.15", features = ["xxh3"] }

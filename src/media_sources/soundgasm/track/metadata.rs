@@ -1,6 +1,8 @@
 use lazy_static::lazy_static;
 use regex::Regex;
 
+use crate::media_types::MediaMetadata;
+
 use super::SoundgasmAudioTrackRow;
 
 #[derive(Clone, Debug)]
@@ -27,6 +29,16 @@ impl From<SoundgasmAudioTrackRow> for TrackMetadata {
 			title: row.title,
 			description: row.description,
 		}
+	}
+}
+
+impl MediaMetadata for TrackMetadata {
+	async fn get_title(&self) -> String {
+		self.title.clone()
+	}
+
+	async fn get_description(&self) -> String {
+		self.description.clone()
 	}
 }
 
