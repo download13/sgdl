@@ -6,7 +6,7 @@ use crate::{
 	media_sources::soundgasm::{
 		profile::PROFILE_SLUG_PATTERN, track::TrackMetadata, SoundgasmAudioTrackRow,
 	},
-	media_types::{MediaItem, MediaMetadata, MediaPointer},
+	media_types::{MediaBlobPointer, MediaItem, MediaMetadata, MediaPointer},
 };
 
 pub const TRACK_SLUG_PATTERN: &str = "a-zA-Z0-9_-";
@@ -66,13 +66,30 @@ impl From<SoundgasmAudioTrackRow> for TrackPointer {
 	}
 }
 
+impl From<&SoundgasmAudioTrackRow> for TrackPointer {
+	fn from(row: &SoundgasmAudioTrackRow) -> Self {
+		Self {
+			profile_slug: row.profile_slug.clone(),
+			track_slug: row.track_slug.clone(),
+		}
+	}
+}
+
 impl MediaPointer for TrackPointer {
 	async fn fetch_metadata(&self) -> Vec<impl MediaMetadata> {
-		let Some((metadata, sound_pointer)) = self.fetch_track_page().await else {
+		let Some((metadata, _)) = self.fetch_track_page().await else {
 			return vec![];
 		};
 
-		sound_pointer.
+		vec![metadata]
+	}
+
+	async fn fetch_blob_pointer(&self) -> Option<impl MediaBlobPointer> {
+		let Some((_, sound_pointer)) = self.fetch_track_page().await else {
+			return None;
+		};
+
+		Some(sound_pointer)
 	}
 }
 

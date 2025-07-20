@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use lazy_static::lazy_static;
 use regex::Regex;
 
-use crate::file_store::MediaBlob;
+use crate::{media_sources::soundgasm::SoundgasmAudioTrackRow, media_types::MediaBlobPointer};
 
 #[derive(Clone, Debug)]
 pub struct TrackSoundPointer {
@@ -23,9 +23,15 @@ impl TrackSoundPointer {
 			file_extension,
 		})
 	}
+}
+
+impl MediaBlobPointer for TrackSoundPointer {
+	fn get_path(&self) -> PathBuf {
+		PathBuf::from(format!("{}.{}", self.sound_id, self.file_extension))
+	}
 
 	#[cfg(not(test))]
-	pub fn get_download_url(&self) -> String {
+	fn get_download_url(&self) -> String {
 		format!(
 			"https://media.soundgasm.net/sounds/{}.{}",
 			self.sound_id, self.file_extension
@@ -34,17 +40,30 @@ impl TrackSoundPointer {
 
 	// TODO: Change this to a mock URL for testing purposes
 	#[cfg(test)]
-	pub fn get_download_url(&self) -> String {
+	fn get_download_url(&self) -> String {
 		format!(
-			"https://media.soundgasm.net/sounds/{}.{}",
+			"http://localhost:5268/sounds/{}.{}",
 			self.sound_id, self.file_extension
 		)
 	}
 }
 
-impl MediaBlob for TrackSoundPointer {
-	fn get_path(&self) -> PathBuf {
-		PathBuf::from(format!("soundgasm_audio/{}.{}", self.sound_id, self.file_extension).as_str())
+impl TryFrom<&SoundgasmAudioTrackRow> for TrackSoundPointer {
+	type Error = String;
+
+	fn try_from(value: &SoundgasmAudioTrackRow) -> Result<Self, Self::Error> {
+		let Some(sound_id) = value.sound_id.clone() else {
+			return Err("sound_id is None".to_string());
+		};
+
+		let Some(file_extension) = value.file_extension.clone() else {
+			return Err("file_extension is None".to_string());
+		};
+
+		Ok(Self {
+			sound_id,
+			file_extension,
+		})
 	}
 }
 

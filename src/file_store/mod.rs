@@ -1,3 +1,4 @@
+pub mod download_manager;
 mod media_blob;
 
 use diesel::prelude::*;

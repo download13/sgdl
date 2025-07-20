@@ -32,12 +32,21 @@ impl From<SoundgasmAudioTrackRow> for TrackMetadata {
 	}
 }
 
+impl From<&SoundgasmAudioTrackRow> for TrackMetadata {
+	fn from(row: &SoundgasmAudioTrackRow) -> Self {
+		Self {
+			title: row.title.clone(),
+			description: row.description.clone(),
+		}
+	}
+}
+
 impl MediaMetadata for TrackMetadata {
-	async fn get_title(&self) -> String {
+	fn get_title(&self) -> String {
 		self.title.clone()
 	}
 
-	async fn get_description(&self) -> String {
+	fn get_description(&self) -> String {
 		self.description.clone()
 	}
 }

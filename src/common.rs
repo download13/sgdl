@@ -17,7 +17,3 @@ pub async fn fetch_text(url: String) -> Result<String, Error> {
 
 	Ok(text)
 }
-
-pub async fn stream_bytes(url: String) -> Option<reqwest::Response> {
-	CLIENT.get(url).send().await.ok()
-}

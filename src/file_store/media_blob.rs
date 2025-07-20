@@ -5,8 +5,34 @@ use xxhash_rust::xxh3::Xxh3;
 
 pub trait MediaBlob {
 	fn get_path(&self) -> PathBuf;
+	fn get_content_length(&self) -> i64;
+	fn get_content_hash(&self) -> String;
 
-	async fn get_content_hash(&self) -> Option<String> {
+	async fn verify(&self) -> bool {
+		if !self.verify_content_length().await {
+			return false;
+		}
+
+		self.verify_content_hash().await
+	}
+
+	async fn verify_content_hash(&self) -> bool {
+		let Some(content_hash) = self.calculate_content_hash().await else {
+			return false;
+		};
+
+		self.get_content_hash() == content_hash
+	}
+
+	async fn verify_content_length(&self) -> bool {
+		let Some(content_length) = self.calculate_content_length().await else {
+			return false;
+		};
+
+		self.get_content_length() == content_length
+	}
+
+	async fn calculate_content_hash(&self) -> Option<String> {
 		let file_path = self.get_path();
 		if !file_path.is_file() {
 			return None;
@@ -34,7 +60,7 @@ pub trait MediaBlob {
 		Some(format!("{:x}", hash))
 	}
 
-	async fn get_content_length(&self) -> Option<i64> {
+	async fn calculate_content_length(&self) -> Option<i64> {
 		let path = self.get_path();
 		tokio::fs::metadata(path)
 			.await

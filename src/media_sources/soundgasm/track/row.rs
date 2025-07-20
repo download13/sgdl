@@ -1,3 +1,5 @@
+use std::fmt::Debug;
+
 use diesel::prelude::*;
 use log::debug;
 
@@ -7,7 +9,7 @@ use crate::schema;
 use crate::Context;
 
 #[derive(Debug, Clone, Selectable, Insertable, Queryable, QueryableByName)]
-#[diesel(table_name = schema::soundgasm_tracks)]
+#[diesel(table_name = crate::schema::soundgasm_tracks)]
 #[diesel(check_for_backend(diesel::sqlite::Sqlite))]
 pub struct SoundgasmAudioTrackRow {
 	pub profile_slug: String,
@@ -74,7 +76,10 @@ impl SoundgasmAudioTrackRow {
 
 impl From<SoundgasmAudioTrack> for SoundgasmAudioTrackRow {
 	fn from(track: SoundgasmAudioTrack) -> Self {
-		let stored_audio = track.stored_audio;
+		let (content_hash, content_length) = match track.stored_audio {
+			Some(audio) => (Some(audio.content_hash), Some(audio.content_length)),
+			None => (None, None),
+		};
 
 		Self {
 			profile_slug: track.pointer.profile_slug,
@@ -83,14 +88,8 @@ impl From<SoundgasmAudioTrack> for SoundgasmAudioTrackRow {
 			description: track.metadata.description,
 			sound_id: Some(track.sound_pointer.sound_id),
 			file_extension: Some(track.sound_pointer.file_extension.clone()),
-			content_hash: match &stored_audio {
-				Some(stored_audio) => stored_audio.content_hash.clone(),
-				None => None,
-			},
-			content_length: match &stored_audio {
-				Some(stored_audio) => stored_audio.content_length,
-				None => None,
-			},
+			content_hash,
+			content_length,
 			created_at: chrono::Utc::now().naive_utc(),
 			updated_at: chrono::Utc::now().naive_utc(),
 			deleted_at: None,

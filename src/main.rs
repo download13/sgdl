@@ -21,7 +21,6 @@ use Commands::*;
 use file_store::FileStore;
 
 use crate::media_sources::soundgasm::SoundgasmAudioTrack;
-use crate::media_sources::ProviderType;
 use crate::media_types::MediaItem;
 use crate::media_types::MediaType;
 
@@ -56,19 +55,17 @@ pub struct Context {
 
 impl Context {
 	async fn search(
-		&self,
+		&mut self,
 		query: &str,
 		filter_media_type: Option<MediaType>,
-		filter_provider_type: Option<ProviderType>,
+		// filter_provider_type: Option<ProviderType>,
 	) -> Vec<impl MediaItem> {
 		let results_vec = match filter_media_type {
-			Some(MediaType::Audio) => SoundgasmAudioTrack::search(self, query).await,
+			Some(MediaType::AudioMp3) => SoundgasmAudioTrack::search(self, query).await,
 			_ => SoundgasmAudioTrack::search(self, query).await,
 		};
 
-		let results = results_vec;
-
-		results
+		results_vec
 	}
 }
 
@@ -122,9 +119,6 @@ async fn main() {
 		Scan { media_string } => {
 			commands::scan_command(media_string, &mut context).await;
 		}
-		// Ensure { media_string } => {
-		// 	commands::ensure_command(&mut context, media_string).await;
-		// }
 		Tui => {
 			commands::tui_command(&mut context).await;
 		}

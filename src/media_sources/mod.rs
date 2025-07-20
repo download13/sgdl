@@ -3,6 +3,7 @@ pub mod soundgasm;
 
 // use crate::media_types::MediaItem;
 
+#[derive(strum_macros::Display, strum_macros::AsRefStr)]
 pub enum ProviderType {
 	Soundgasm,
 	Kemono,

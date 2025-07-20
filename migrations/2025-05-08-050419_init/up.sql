@@ -1,4 +1,19 @@
-CREATE TABLE `soundgasm_tracks`(
+CREATE TABLE `file_downloads` (
+	`id` INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+	`url` TEXT NOT NULL,
+	`file_path` TEXT NOT NULL,
+	`created_at` DATETIME NOT NULL,
+	UNIQUE(`url`, `file_path`)
+);
+
+CREATE TABLE `downloaded_segments` (
+	`download_id` INTEGER NOT NULL,
+	`start_index` INTEGER NOT NULL,
+	`end_index` INTEGER NOT NULL,
+	FOREIGN KEY(`download_id`) REFERENCES file_downloads(`id`)
+);
+
+CREATE TABLE `soundgasm_tracks` (
 	`profile_slug` TEXT NOT NULL,
 	`track_slug` TEXT NOT NULL,
 	`title` TEXT NOT NULL,
