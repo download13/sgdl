@@ -3,6 +3,7 @@
 mod commands;
 mod common;
 mod config;
+mod context;
 mod file_store;
 mod macros;
 mod media_sources;
@@ -20,9 +21,7 @@ use Commands::*;
 
 use file_store::FileStore;
 
-use crate::media_sources::soundgasm::SoundgasmAudioTrack;
-use crate::media_types::MediaItem;
-use crate::media_types::MediaType;
+pub use context::Context;
 
 #[derive(Parser, Debug)]
 #[command(name = "sgdl")]
@@ -45,28 +44,6 @@ enum Commands {
 		media_string: String,
 	},
 	Tui,
-}
-
-pub struct Context {
-	pub config: Config,
-	pub conn: SqliteConnection,
-	pub file_store: FileStore,
-}
-
-impl Context {
-	async fn search(
-		&mut self,
-		query: &str,
-		filter_media_type: Option<MediaType>,
-		// filter_provider_type: Option<ProviderType>,
-	) -> Vec<impl MediaItem> {
-		let results_vec = match filter_media_type {
-			Some(MediaType::AudioMp3) => SoundgasmAudioTrack::search(self, query).await,
-			_ => SoundgasmAudioTrack::search(self, query).await,
-		};
-
-		results_vec
-	}
 }
 
 impl Clone for Context {

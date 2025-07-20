@@ -2,9 +2,10 @@ use std::collections::HashMap;
 
 use log::error;
 use ratatui::{
-	crossterm::event::{self, Event, KeyCode, KeyEvent, KeyModifiers},
+	crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers},
 	layout::{Constraint, Layout, Rect},
-	style::{Color, Style},
+	style::{Color, Style, Styled, Stylize},
+	text::Line,
 	widgets::{Block, Borders, Paragraph, Row, Table, TableState},
 	DefaultTerminal, Frame,
 };
@@ -30,7 +31,7 @@ pub async fn tui_command(context: &mut Context) {
 	ratatui::restore();
 }
 
-#[derive(PartialEq, Eq, Default)]
+#[derive(Debug, PartialEq, Eq, Default)]
 enum InputMode {
 	#[default]
 	Search,
@@ -76,21 +77,23 @@ impl TuiState {
 
 			match event {
 				Event::Key(key) => {
-					match key.code {
-						KeyCode::Esc => break,
-						KeyCode::Tab => {
-							if key.modifiers.contains(KeyModifiers::SHIFT) {
-								self.mode = self.mode.prev();
-							} else {
-								self.mode = self.mode.next();
+					if key.kind == KeyEventKind::Press {
+						match key.code {
+							KeyCode::Esc => break,
+							KeyCode::Tab => {
+								if key.modifiers.contains(KeyModifiers::SHIFT) {
+									self.mode = self.mode.prev();
+								} else {
+									self.mode = self.mode.next();
+								}
 							}
-						}
-						_ => {}
-					};
+							_ => {}
+						};
 
-					match self.mode {
-						InputMode::Search => self.handle_search_keys(key),
-						InputMode::List => self.handle_list_keys(key),
+						match self.mode {
+							InputMode::Search => self.handle_search_keys(key),
+							InputMode::List => self.handle_list_keys(key),
+						}
 					}
 				}
 				Event::Resize(width, height) => {
@@ -128,6 +131,9 @@ impl TuiState {
 	}
 
 	fn handle_list_keys(&mut self, key: KeyEvent) {
+		if key.kind == KeyEventKind::Release {
+			return;
+		}
 		match key.code {
 			KeyCode::Up => {
 				self.table_state.scroll_up_by(1);
@@ -140,16 +146,11 @@ impl TuiState {
 	}
 
 	fn render(&self, frame: &mut Frame, search_results: &[impl MediaItem]) {
-		let [search_input_area, search_results_area, instructions_area] = Layout::vertical([
-			Constraint::Length(3),
-			Constraint::Fill(1),
-			Constraint::Length(3),
-		])
-		.areas(frame.area());
+		let [search_input_area, search_results_area] =
+			Layout::vertical([Constraint::Length(3), Constraint::Fill(1)]).areas(frame.area());
 
 		self.render_search_input(frame, search_input_area);
 		self.render_search_results(frame, search_results_area, search_results);
-		self.render_instructions(frame, instructions_area);
 	}
 
 	fn render_search_input(&self, frame: &mut Frame, area: Rect) {
@@ -201,26 +202,25 @@ impl TuiState {
 				Constraint::Min(type_width),
 			],
 		)
-		.block(Block::default().borders(Borders::ALL))
+		.block(
+			Block::default().borders(Borders::ALL).title_bottom(
+				Line::from(vec![
+					"Quit ".into(),
+					"<Esc>".blue(),
+					" Switch focus ".into(),
+					"<Tab>".set_style(Color::Blue),
+					" Download selected ".into(),
+					"<d>".set_style(Color::Blue),
+					" abort download ".into(),
+					"<a>".set_style(Color::Blue),
+				])
+				.centered(),
+			),
+		)
 		.style(style)
 		.row_highlight_style(Style::default().fg(Color::Yellow));
 
 		frame.render_widget(list, area);
-	}
-
-	fn render_instructions(&self, frame: &mut Frame, area: Rect) {
-		let instructions = match self.mode {
-			InputMode::Search => "<Esc> quit | <Tab> switch focus | type to search",
-			InputMode::List => {
-				"<Esc> quit | <Tab> switch focus | <d> download selected | <a> abort download  "
-			}
-		};
-
-		let paragraph = Paragraph::new(instructions)
-			.centered()
-			.block(Block::default().borders(Borders::ALL));
-
-		frame.render_widget(paragraph, area);
 	}
 }
 
@@ -259,4 +259,28 @@ fn media_item_to_row(item: &impl MediaItem) -> Row<'static> {
 		item.get_source().to_string(),
 		item.get_type().to_string(),
 	])
+}
+
+#[cfg(test)]
+mod test {
+	use std::collections::HashMap;
+
+	use ratatui::widgets::TableState;
+	use tui_input::Input;
+
+	use super::{InputMode, TuiState};
+
+	#[test]
+	fn tui_state_tab() {
+		let state = TuiState {
+			mode: InputMode::Search,
+			download_progress: HashMap::new(),
+			search_state: Input::default(),
+			table_state: TableState::default(),
+		};
+
+		assert_eq!(state.mode, InputMode::Search);
+
+		// state.
+	}
 }
