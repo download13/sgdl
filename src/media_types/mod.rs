@@ -1,6 +1,8 @@
 use std::path::PathBuf;
 
-use crate::{file_store::MediaBlob, media_sources::ProviderType, Context};
+use reqwest::Url;
+
+use crate::{media_sources::ProviderType, Context};
 
 #[derive(strum_macros::Display, strum_macros::AsRefStr)]
 pub enum MediaType {
@@ -53,7 +55,7 @@ pub trait MediaPointer {
 
 pub trait MediaBlobPointer {
 	fn get_path(&self) -> PathBuf;
-	fn get_download_url(&self) -> String;
+	fn get_download_url(&self) -> Url;
 }
 
 pub trait MediaMetadata {

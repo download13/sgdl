@@ -59,14 +59,15 @@ struct TuiState {
 	mode: InputMode,
 	search_state: Input,
 	table_state: TableState,
+	download_manager: DownloadManager,
 	download_progress: HashMap<Url, DownloadProgress>,
 }
 
 impl TuiState {
 	async fn run(&mut self, mut terminal: DefaultTerminal, context: &mut Context) -> Result<(), ()> {
-		let download_manager = DownloadManager::new(32);
-
 		loop {
+			let search_results = context.search(self.search_state.value(), None).await;
+
 			let event = match event::read() {
 				Ok(event) => event,
 				Err(err) => {
@@ -92,7 +93,7 @@ impl TuiState {
 
 						match self.mode {
 							InputMode::Search => self.handle_search_keys(key),
-							InputMode::List => self.handle_list_keys(key),
+							InputMode::List => self.handle_list_keys(key, &search_results),
 						}
 					}
 				}
@@ -109,8 +110,6 @@ impl TuiState {
 				}
 				_ => {}
 			}
-
-			let search_results = context.search(self.search_state.value(), None).await;
 
 			if let Err(e) = terminal.draw(|frame| {
 				self.render(frame, &search_results);
@@ -130,7 +129,7 @@ impl TuiState {
 		self.table_state.select(None);
 	}
 
-	fn handle_list_keys(&mut self, key: KeyEvent) {
+	fn handle_list_keys(&mut self, key: KeyEvent, search_results: &Vec<impl MediaItem>) {
 		if key.kind == KeyEventKind::Release {
 			return;
 		}
@@ -140,6 +139,13 @@ impl TuiState {
 			}
 			KeyCode::Down => {
 				self.table_state.scroll_down_by(1);
+			}
+			KeyCode::Char('d') => {
+				let Some(index) = self.table_state.selected() else {
+					return;
+				};
+				let track = search_results[index];
+				self.download_manager.start_download();
 			}
 			_ => {}
 		}
@@ -259,28 +265,4 @@ fn media_item_to_row(item: &impl MediaItem) -> Row<'static> {
 		item.get_source().to_string(),
 		item.get_type().to_string(),
 	])
-}
-
-#[cfg(test)]
-mod test {
-	use std::collections::HashMap;
-
-	use ratatui::widgets::TableState;
-	use tui_input::Input;
-
-	use super::{InputMode, TuiState};
-
-	#[test]
-	fn tui_state_tab() {
-		let state = TuiState {
-			mode: InputMode::Search,
-			download_progress: HashMap::new(),
-			search_state: Input::default(),
-			table_state: TableState::default(),
-		};
-
-		assert_eq!(state.mode, InputMode::Search);
-
-		// state.
-	}
 }

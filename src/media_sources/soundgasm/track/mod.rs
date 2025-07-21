@@ -94,7 +94,6 @@ impl MediaItem for SoundgasmAudioTrack {
 		// Fixes?
 		// Create a dedicated blocking thread that handles database requests from a queue and holds it's own connection handle
 
-		// let task = tokio::task::spawn_blocking(move || {
 		let rows = crate::schema::soundgasm_tracks::table
 			.filter(conditionals)
 			.select(SoundgasmAudioTrackRow::as_select())

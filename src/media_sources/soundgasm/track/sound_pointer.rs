@@ -2,6 +2,7 @@ use std::path::PathBuf;
 
 use lazy_static::lazy_static;
 use regex::Regex;
+use reqwest::Url;
 
 use crate::{media_sources::soundgasm::SoundgasmAudioTrackRow, media_types::MediaBlobPointer};
 
@@ -31,20 +32,28 @@ impl MediaBlobPointer for TrackSoundPointer {
 	}
 
 	#[cfg(not(test))]
-	fn get_download_url(&self) -> String {
-		format!(
-			"https://media.soundgasm.net/sounds/{}.{}",
-			self.sound_id, self.file_extension
+	fn get_download_url(&self) -> Url {
+		Url::parse(
+			format!(
+				"https://media.soundgasm.net/sounds/{}.{}",
+				self.sound_id, self.file_extension
+			)
+			.as_str(),
 		)
+		.unwrap()
 	}
 
 	// TODO: Change this to a mock URL for testing purposes
 	#[cfg(test)]
-	fn get_download_url(&self) -> String {
-		format!(
-			"http://localhost:5268/sounds/{}.{}",
-			self.sound_id, self.file_extension
+	fn get_download_url(&self) -> Url {
+		Url::parse(
+			format!(
+				"http://localhost:5268/sounds/{}.{}",
+				self.sound_id, self.file_extension
+			)
+			.as_str(),
 		)
+		.unwrap()
 	}
 }
 

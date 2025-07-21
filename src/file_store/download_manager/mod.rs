@@ -1,4 +1,4 @@
-use std::{collections::HashMap, io::SeekFrom};
+use std::{collections::HashMap, io::SeekFrom, path::Path};
 
 use futures_util::StreamExt;
 use http_content_range::ContentRange;
@@ -11,11 +11,19 @@ use tokio::{
 	task::JoinHandle,
 };
 
+use crate::media_types::{MediaBlobPointer, MediaItem};
+
 pub struct DownloadManager {
 	progress_tx: Sender<(Url, DownloadProgress)>,
 	progress_rx: Receiver<(Url, DownloadProgress)>,
 	downloads: HashMap<Url, JoinHandle<()>>,
 	progress: HashMap<Url, DownloadProgress>,
+}
+
+impl Default for DownloadManager {
+	fn default() -> Self {
+		Self::new(32)
+	}
 }
 
 impl DownloadManager {
@@ -34,20 +42,29 @@ impl DownloadManager {
 		&self.progress
 	}
 
-	async fn start_download(
+	pub async fn start_download(
 		&mut self,
-		download_request: DownloadRequest,
+		item: impl MediaItem,
 		tx: Sender<(Url, DownloadProgress)>,
 	) {
+		let url = item.get_blob_pointer().get_download_url();
 		// Ignore the request if we're already downloading the file
-		if self.progress.contains_key(&download_request.url) {
+		if self.progress.contains_key(&url) {
 			return;
 		}
 
-		let url = download_request.url.clone();
+		let mut file = match File::open(item.get_blob_pointer().get_path()).await {
+			Ok(file) => file,
+			Err(err) => {
+				error!("Unable to open file for download: {}", err);
+				return;
+			}
+		};
 
 		let handle = tokio::spawn(Self::run_download(
-			download_request,
+			user_agent,
+			&url,
+			file,
 			self.progress_tx.clone(),
 		));
 
@@ -60,18 +77,20 @@ impl DownloadManager {
 		);
 	}
 
-	async fn abort_download(&mut self) {}
+	pub async fn abort_download(&mut self) {}
 
 	async fn run_download(
-		download_request: DownloadRequest,
+		user_agent: String,
+		url: &Url,
+		file: &mut File,
 		tx: mpsc::Sender<(Url, DownloadProgress)>,
 	) {
 		let client = reqwest::Client::builder()
-			.user_agent(download_request.user_agent)
+			.user_agent(user_agent)
 			.build()
 			.unwrap();
 
-		let response = match client.get(download_request.url.clone()).send().await {
+		let response = match client.get(url.clone()).send().await {
 			Ok(response) => response,
 			Err(err) => {
 				// TODO: send back error progress
@@ -79,9 +98,7 @@ impl DownloadManager {
 			}
 		};
 
-		let mut file = download_request.to_file;
-
-		Self::seek_to_content_range(&response, &mut file);
+		Self::seek_to_content_range(&response, file);
 
 		let mut stream = response.bytes_stream();
 
@@ -100,7 +117,7 @@ impl DownloadManager {
 
 			if let Err(err) = tx
 				.send((
-					download_request.url.clone(),
+					url.clone(),
 					DownloadProgress {
 						bytes_downloaded: bytes.len() as u64,
 						total_size: file.stream_position().await.ok(),
@@ -132,12 +149,6 @@ impl DownloadManager {
 
 		Some(())
 	}
-}
-
-struct DownloadRequest {
-	user_agent: String,
-	url: Url,
-	to_file: File,
 }
 
 pub struct DownloadProgress {

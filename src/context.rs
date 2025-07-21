@@ -1,4 +1,4 @@
-use diesel::SqliteConnection;
+use diesel::{result, SqliteConnection};
 
 use crate::{
 	config::Config,
@@ -20,11 +20,9 @@ impl Context {
 		filter_media_type: Option<MediaType>,
 		// filter_provider_type: Option<ProviderType>,
 	) -> Vec<impl MediaItem> {
-		let results_vec = match filter_media_type {
+		match filter_media_type {
 			Some(MediaType::AudioMp3) => SoundgasmAudioTrack::search(self, query).await,
 			_ => SoundgasmAudioTrack::search(self, query).await,
-		};
-
-		results_vec
+		}
 	}
 }
