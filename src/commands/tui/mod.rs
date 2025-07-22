@@ -10,6 +10,7 @@ use ratatui::{
 	DefaultTerminal, Frame,
 };
 use reqwest::Url;
+use tokio::sync::mpsc;
 use tui_input::{backend::crossterm::EventHandler, Input};
 use unicode_width::UnicodeWidthStr;
 
@@ -54,18 +55,39 @@ impl InputMode {
 	}
 }
 
-#[derive(Default)]
 struct TuiState {
 	mode: InputMode,
 	search_state: Input,
 	table_state: TableState,
 	download_manager: DownloadManager,
 	download_progress: HashMap<Url, DownloadProgress>,
+	progress_tx: mpsc::Sender<(Url, DownloadProgress)>,
+	receiver_rx: mpsc::Receiver<(Url, DownloadProgress)>,
+}
+
+impl Default for TuiState {
+	fn default() -> Self {
+		let (progress_tx, receiver_rx) = mpsc::channel(32);
+
+		Self {
+			mode: InputMode::default(),
+			search_state: Input::default(),
+			table_state: TableState::default(),
+			download_manager: DownloadManager::default(),
+			download_progress: HashMap::default(),
+			progress_tx,
+			receiver_rx,
+		}
+	}
 }
 
 impl TuiState {
 	async fn run(&mut self, mut terminal: DefaultTerminal, context: &mut Context) -> Result<(), ()> {
 		loop {
+			while let Ok((url, progress)) = self.receiver_rx.try_recv() {
+				self.download_progress.insert(url, progress);
+			}
+
 			let search_results = context.search(self.search_state.value(), None).await;
 
 			let event = match event::read() {
@@ -92,9 +114,9 @@ impl TuiState {
 						};
 
 						match self.mode {
-							InputMode::Search => self.handle_search_keys(key),
-							InputMode::List => self.handle_list_keys(key, &search_results),
-						}
+							InputMode::Search => self.handle_search_keys(key).await,
+							InputMode::List => self.handle_list_keys(key, &search_results).await,
+						};
 					}
 				}
 				Event::Resize(width, height) => {
@@ -124,15 +146,16 @@ impl TuiState {
 		Ok(())
 	}
 
-	fn handle_search_keys(&mut self, key: KeyEvent) {
+	async fn handle_search_keys(&mut self, key: KeyEvent) {
 		self.search_state.handle_event(&Event::Key(key));
 		self.table_state.select(None);
 	}
 
-	fn handle_list_keys(&mut self, key: KeyEvent, search_results: &Vec<impl MediaItem>) {
+	async fn handle_list_keys(&mut self, key: KeyEvent, search_results: &[impl MediaItem]) {
 		if key.kind == KeyEventKind::Release {
 			return;
 		}
+
 		match key.code {
 			KeyCode::Up => {
 				self.table_state.scroll_up_by(1);
@@ -144,8 +167,11 @@ impl TuiState {
 				let Some(index) = self.table_state.selected() else {
 					return;
 				};
-				let track = search_results[index];
-				self.download_manager.start_download();
+				let track = search_results[index].clone();
+				self
+					.download_manager
+					.start_download(track, self.progress_tx.clone())
+					.await;
 			}
 			_ => {}
 		}

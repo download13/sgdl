@@ -1,4 +1,4 @@
-use std::{collections::HashMap, io::SeekFrom, path::Path};
+use std::{collections::HashMap, io::SeekFrom, path::PathBuf};
 
 use futures_util::StreamExt;
 use http_content_range::ContentRange;
@@ -53,18 +53,12 @@ impl DownloadManager {
 			return;
 		}
 
-		let mut file = match File::open(item.get_blob_pointer().get_path()).await {
-			Ok(file) => file,
-			Err(err) => {
-				error!("Unable to open file for download: {}", err);
-				return;
-			}
-		};
+		let user_agent = item.get_source().get_user_agent();
 
 		let handle = tokio::spawn(Self::run_download(
 			user_agent,
-			&url,
-			file,
+			url.clone(),
+			item.get_blob_pointer().get_path(),
 			self.progress_tx.clone(),
 		));
 
@@ -81,10 +75,18 @@ impl DownloadManager {
 
 	async fn run_download(
 		user_agent: String,
-		url: &Url,
-		file: &mut File,
+		url: Url,
+		path: PathBuf,
 		tx: mpsc::Sender<(Url, DownloadProgress)>,
 	) {
+		let mut file = match File::open(path).await {
+			Ok(file) => file,
+			Err(err) => {
+				error!("Unable to open file for download: {}", err);
+				return;
+			}
+		};
+
 		let client = reqwest::Client::builder()
 			.user_agent(user_agent)
 			.build()
@@ -98,7 +100,7 @@ impl DownloadManager {
 			}
 		};
 
-		Self::seek_to_content_range(&response, file);
+		Self::seek_to_content_range(&response, &mut file);
 
 		let mut stream = response.bytes_stream();
 

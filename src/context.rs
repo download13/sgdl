@@ -1,4 +1,4 @@
-use diesel::{result, SqliteConnection};
+use diesel::SqliteConnection;
 
 use crate::{
 	config::Config,

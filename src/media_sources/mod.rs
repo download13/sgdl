@@ -1,3 +1,5 @@
+use crate::common::USER_AGENT;
+
 mod kemono;
 pub mod soundgasm;
 
@@ -8,6 +10,19 @@ pub enum ProviderType {
 	Soundgasm,
 	Kemono,
 	Patreon,
+}
+
+impl ProviderType {
+	pub fn get_user_agent(&self) -> String {
+		use ProviderType::*;
+
+		match self {
+			Soundgasm => USER_AGENT,
+			Kemono => USER_AGENT,
+			Patreon => USER_AGENT,
+		}
+		.to_string()
+	}
 }
 
 pub enum PointerType {

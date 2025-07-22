@@ -63,7 +63,7 @@ pub trait MediaMetadata {
 	fn get_description(&self) -> String;
 }
 
-pub trait MediaItem
+pub trait MediaItem: Clone
 where
 	Self: std::marker::Sized,
 {
