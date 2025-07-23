@@ -11,6 +11,7 @@ chrono = "0.4.41"
 clap = { version = "4.5.37", features = ["derive"] }
 confy = "0.6.1"
 crossterm = "0.29.0"
+derive_setters = "0.1.8"
 diesel = { version = "2.2.10", features = [
 	"sqlite",
 	"returning_clauses_for_sqlite_3_35",

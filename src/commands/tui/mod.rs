@@ -1,3 +1,5 @@
+mod components;
+
 use std::collections::HashMap;
 
 use log::error;
@@ -6,7 +8,7 @@ use ratatui::{
 	layout::{Constraint, Layout, Rect},
 	style::{Color, Style, Styled, Stylize},
 	text::Line,
-	widgets::{Block, Borders, Paragraph, Row, Table, TableState},
+	widgets::{Block, Borders, Row, Table, TableState},
 	DefaultTerminal, Frame,
 };
 use reqwest::Url;
@@ -15,6 +17,7 @@ use tui_input::{backend::crossterm::EventHandler, Input};
 use unicode_width::UnicodeWidthStr;
 
 use crate::{
+	commands::tui::components::{Component, LineInput},
 	file_store::download_manager::{DownloadManager, DownloadProgress},
 	media_types::MediaItem,
 	Context,
@@ -32,32 +35,47 @@ pub async fn tui_command(context: &mut Context) {
 	ratatui::restore();
 }
 
-#[derive(Debug, PartialEq, Eq, Default)]
-enum InputMode {
+#[derive(Debug, PartialEq, Eq, Default, Copy, Clone)]
+enum CyclableInputMode {
 	#[default]
 	Search,
 	List,
 }
 
-impl InputMode {
-	fn next(&self) -> InputMode {
-		match self {
-			Self::Search => Self::List,
-			Self::List => Self::Search,
-		}
-	}
+#[derive(Debug, PartialEq, Eq, Copy, Clone)]
+enum InputMode {
+	Cyclable(CyclableInputMode),
+	/// Store the previous state while the popup is active
+	AddUrl(CyclableInputMode),
+}
 
-	fn prev(&self) -> InputMode {
-		match self {
-			Self::Search => Self::List,
-			Self::List => Self::Search,
-		}
+impl Default for InputMode {
+	fn default() -> Self {
+		Self::Cyclable(CyclableInputMode::Search)
 	}
 }
 
-struct TuiState {
+impl InputMode {
+	fn next(&self) -> InputMode {
+		if let Self::Cyclable(cyclable) = self {
+			return InputMode::Cyclable(match cyclable {
+				CyclableInputMode::List => CyclableInputMode::Search,
+				CyclableInputMode::Search => CyclableInputMode::List,
+			});
+		}
+
+		*self
+	}
+
+	fn prev(&self) -> InputMode {
+		self.next()
+	}
+}
+
+struct TuiState<'a> {
 	mode: InputMode,
-	search_state: Input,
+	search_input: LineInput<'a>,
+	add_url_input: Input,
 	table_state: TableState,
 	download_manager: DownloadManager,
 	download_progress: HashMap<Url, DownloadProgress>,
@@ -65,13 +83,14 @@ struct TuiState {
 	receiver_rx: mpsc::Receiver<(Url, DownloadProgress)>,
 }
 
-impl Default for TuiState {
+impl<'a> Default for TuiState<'a> {
 	fn default() -> Self {
 		let (progress_tx, receiver_rx) = mpsc::channel(32);
 
 		Self {
 			mode: InputMode::default(),
-			search_state: Input::default(),
+			search_input: LineInput::default(),
+			add_url_input: Input::default(),
 			table_state: TableState::default(),
 			download_manager: DownloadManager::default(),
 			download_progress: HashMap::default(),
@@ -81,14 +100,14 @@ impl Default for TuiState {
 	}
 }
 
-impl TuiState {
+impl TuiState<'_> {
 	async fn run(&mut self, mut terminal: DefaultTerminal, context: &mut Context) -> Result<(), ()> {
 		loop {
 			while let Ok((url, progress)) = self.receiver_rx.try_recv() {
 				self.download_progress.insert(url, progress);
 			}
 
-			let search_results = context.search(self.search_state.value(), None).await;
+			let search_results = context.search(self.search_input.value(), None).await;
 
 			let event = match event::read() {
 				Ok(event) => event,
@@ -102,7 +121,14 @@ impl TuiState {
 				Event::Key(key) => {
 					if key.kind == KeyEventKind::Press {
 						match key.code {
-							KeyCode::Esc => break,
+							KeyCode::Esc => match self.mode {
+								InputMode::AddUrl(cyclable) => {
+									self.mode = InputMode::Cyclable(cyclable);
+								}
+								InputMode::Cyclable(_) => {
+									break;
+								}
+							},
 							KeyCode::Tab => {
 								if key.modifiers.contains(KeyModifiers::SHIFT) {
 									self.mode = self.mode.prev();
@@ -114,8 +140,14 @@ impl TuiState {
 						};
 
 						match self.mode {
-							InputMode::Search => self.handle_search_keys(key).await,
-							InputMode::List => self.handle_list_keys(key, &search_results).await,
+							InputMode::AddUrl(_) => self.handle_add_url(&event).await,
+							InputMode::Cyclable(CyclableInputMode::Search) => {
+								self.search_input.handle_events(&event);
+								self.table_state.select(None);
+							}
+							InputMode::Cyclable(CyclableInputMode::List) => {
+								self.handle_list_keys(key, &search_results).await
+							}
 						};
 					}
 				}
@@ -146,11 +178,6 @@ impl TuiState {
 		Ok(())
 	}
 
-	async fn handle_search_keys(&mut self, key: KeyEvent) {
-		self.search_state.handle_event(&Event::Key(key));
-		self.table_state.select(None);
-	}
-
 	async fn handle_list_keys(&mut self, key: KeyEvent, search_results: &[impl MediaItem]) {
 		if key.kind == KeyEventKind::Release {
 			return;
@@ -177,35 +204,38 @@ impl TuiState {
 		}
 	}
 
-	fn render(&self, frame: &mut Frame, search_results: &[impl MediaItem]) {
-		let [search_input_area, search_results_area] =
-			Layout::vertical([Constraint::Length(3), Constraint::Fill(1)]).areas(frame.area());
-
-		self.render_search_input(frame, search_input_area);
-		self.render_search_results(frame, search_results_area, search_results);
+	async fn handle_add_url(&mut self, event: &Event) {
+		self.add_url_input.handle_event(event);
 	}
 
-	fn render_search_input(&self, frame: &mut Frame, area: Rect) {
-		let scroll = self
-			.search_state
-			.visual_scroll(area.width.saturating_sub(1).into());
+	fn render(&mut self, frame: &mut Frame, search_results: &[impl MediaItem]) {
+		let area = frame.area();
 
-		let style = match self.mode {
-			InputMode::List => Style::default(),
-			InputMode::Search => Color::Yellow.into(),
-		};
+		let [search_input_area, search_results_area] =
+			Layout::vertical([Constraint::Length(3), Constraint::Fill(1)]).areas(area);
 
-		let input = Paragraph::new(self.search_state.value())
-			.style(style)
-			.block(Block::bordered().title("Search"));
+		self.search_input.draw(frame, search_input_area);
 
-		frame.render_widget(input, area);
+		self.render_search_results(frame, search_results_area, search_results);
 
-		if self.mode == InputMode::Search {
-			// Ratatui hides the cursor unless it's explicitly set. Position the  cursor past the
-			// end of the input text and one line down from the border to the input line
-			let x = self.search_state.visual_cursor().max(scroll) - scroll + 1;
-			frame.set_cursor_position((area.x + x as u16, area.y + 1))
+		match self.mode {
+			InputMode::AddUrl(_) => {
+				let popup_area = Rect {
+					x: area.width / 4,
+					y: area.height / 3,
+					width: area.width / 2,
+					height: area.height / 3,
+				};
+
+				// let input_popup = InputPopup::default()
+				// 	.content("fdf")
+				// 	.title("Add Url")
+				// 	.title_style(Style::new().yellow().bold())
+				// 	.border_style(Color::Yellow.into());
+
+				// frame.render_stateful_widget(input_popup, area, &mut self.add_url_state);
+			}
+			InputMode::Cyclable(_) => {}
 		}
 	}
 
@@ -215,14 +245,16 @@ impl TuiState {
 		area: Rect,
 		search_results: &[impl MediaItem],
 	) {
+		let selected = self.mode == InputMode::Cyclable(CyclableInputMode::List);
+
 		let rows = search_results.iter().map(media_item_to_row);
 
 		let (title_width, author_width, source_width, type_width) =
 			constraint_len_calculator(search_results);
 
-		let style = match self.mode {
-			InputMode::Search => Style::default(),
-			InputMode::List => Style::default().fg(Color::Yellow),
+		let style = match selected {
+			true => Color::Yellow.into(),
+			false => Style::default(),
 		};
 
 		let list = Table::new(
