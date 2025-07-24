@@ -1,4 +1,5 @@
 use ratatui::crossterm::event::Event;
+use ratatui::style::Stylize;
 use ratatui::{
 	prelude::Rect,
 	widgets::{Block, Paragraph},
@@ -16,14 +17,6 @@ pub struct LineInput<'a> {
 }
 
 impl<'a> LineInput<'a> {
-	pub fn new(title: Option<&'a str>) -> Self {
-		Self {
-			state: InputState::default(),
-			title,
-			focused: false,
-		}
-	}
-
 	pub fn value(&self) -> &str {
 		self.state.value()
 	}
@@ -36,14 +29,21 @@ impl<'a> Component for LineInput<'a> {
 		if self.focused {
 			match event {
 				Event::Paste(value) => {
+					log::debug!("Paste into LineInput: {}", value);
 					self.state = InputState::new(value.clone());
 				}
-				Event::Key(_) => {
+				Event::Key(key) => {
+					log::debug!("LineInput KeyEvent: {:?}", key);
 					self.state.handle_event(event);
 				}
 				_ => {}
 			}
 		}
+	}
+
+	fn focused(&mut self, focused: bool) {
+		log::debug!("focused: {}", focused);
+		self.focused = focused
 	}
 
 	fn draw(&mut self, frame: &mut Frame, area: Rect) {
@@ -55,11 +55,13 @@ impl<'a> Component for LineInput<'a> {
 			block
 		};
 
+		let block = if self.focused { block.yellow() } else { block };
+
 		let p = Paragraph::new(self.state.value())
 			// .wrap(Wrap { trim: true })
 			.block(block);
 
-		frame.render_widget(p, area);
+		// let p = if self.focused { p.yellow() } else { p };
 
 		if self.focused {
 			let scroll = self
@@ -72,5 +74,7 @@ impl<'a> Component for LineInput<'a> {
 			frame.set_cursor_position((area.x + x as u16, area.y + 1))
 			// TODO: Read about how to structure components
 		}
+
+		frame.render_widget(p, area);
 	}
 }

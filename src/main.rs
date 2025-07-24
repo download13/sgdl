@@ -17,6 +17,7 @@ use diesel::SqliteConnection;
 use diesel_migrations::{embed_migrations, EmbeddedMigrations, MigrationHarness};
 use std::path::Path;
 use std::path::PathBuf;
+use std::time::SystemTime;
 use Commands::*;
 
 use file_store::FileStore;
@@ -58,7 +59,11 @@ impl Clone for Context {
 
 #[tokio::main]
 async fn main() {
-	simple_logger::SimpleLogger::new().env().init().unwrap();
+	// simple_logger::SimpleLogger::new().env().init().unwrap();
+	if let Err(err) = setup_logger() {
+		eprint!("Unable to start logging system: {}", err);
+		return;
+	}
 
 	let Ok(config) = confy::load::<Config>("sgdl", None) else {
 		eprintln!("Error loading config");
@@ -140,4 +145,21 @@ fn establish_connection(data_path: &Path) -> SqliteConnection {
 		});
 
 	conn
+}
+
+fn setup_logger() -> Result<(), fern::InitError> {
+	fern::Dispatch::new()
+		.format(|out, message, record| {
+			out.finish(format_args!(
+				"[{} {} {}] {}",
+				humantime::format_rfc3339_seconds(SystemTime::now()),
+				record.level(),
+				record.target(),
+				message
+			))
+		})
+		.level(log::LevelFilter::Debug)
+		.chain(fern::log_file("output.log")?)
+		.apply()?;
+	Ok(())
 }

@@ -87,9 +87,12 @@ impl<'a> Default for TuiState<'a> {
 	fn default() -> Self {
 		let (progress_tx, receiver_rx) = mpsc::channel(32);
 
+		let mut search_input = LineInput::default();
+		search_input.focused(true);
+
 		Self {
 			mode: InputMode::default(),
-			search_input: LineInput::default(),
+			search_input,
 			add_url_input: Input::default(),
 			table_state: TableState::default(),
 			download_manager: DownloadManager::default(),
@@ -135,6 +138,10 @@ impl TuiState<'_> {
 								} else {
 									self.mode = self.mode.next();
 								}
+
+								self
+									.search_input
+									.focused(self.mode == InputMode::Cyclable(CyclableInputMode::Search));
 							}
 							_ => {}
 						};

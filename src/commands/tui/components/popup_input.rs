@@ -1,42 +1,48 @@
-use derive_setters::Setters;
-use ratatui::{
-	prelude::{Buffer, Rect},
-	style::Style,
-	text::{Line, Text},
-	widgets::{Block, Borders, Clear, Paragraph, StatefulWidget, Widget, Wrap},
-};
-use tui_input::Input;
+use ratatui::{crossterm::event::Event, prelude::Rect, widgets, Frame};
 
-#[derive(Setters, Default)]
+use crate::commands::tui::components::{Component, LineInput};
+
+#[derive(Default)]
 pub struct InputPopup<'a> {
-	#[setters(into)]
-	title: Line<'a>,
-	#[setters(into)]
-	content: Text<'a>,
-	border_style: Style,
-	title_style: Style,
-	style: Style,
+	input: LineInput<'a>,
 }
 
-impl StatefulWidget for InputPopup<'_> {
-	type State = Input;
+impl<'a> Component for InputPopup<'a> {
+	type Action = <LineInput<'a> as Component>::Action;
 
-	fn render(self, area: Rect, buf: &mut Buffer, value: &mut Input)
-	where
-		Self: Sized,
-	{
-		Clear.render(area, buf);
+	fn init(&mut self) {
+		self.input.init();
+	}
 
-		let block = Block::new()
-			.title(self.title)
-			.title_style(self.title_style)
-			.borders(Borders::ALL)
-			.border_style(self.border_style);
+	fn update(&mut self, action: &Self::Action) {
+		self.input.update(action);
+	}
 
-		Paragraph::new(self.content)
-			.wrap(Wrap { trim: true })
-			.style(self.style)
-			.block(block)
-			.render(area, buf);
+	fn handle_events(&mut self, event: &Event) {
+		self.input.handle_events(event);
+	}
+
+	fn focused(&mut self, focused: bool) {
+		self.input.focused(focused);
+	}
+
+	fn draw(&mut self, frame: &mut Frame, area: Rect) {
+		// Center the popup in the area
+		let popup_width = 40;
+		let popup_height = 3;
+		let x = area.x + (area.width.saturating_sub(popup_width)) / 2;
+		let y = area.y + (area.height.saturating_sub(popup_height)) / 2;
+		let popup_area = Rect {
+			x,
+			y,
+			width: popup_width,
+			height: popup_height,
+		};
+
+		// Draw a clear background for the popup
+		frame.render_widget(widgets::Clear, popup_area);
+
+		// Draw the input with a border
+		self.input.draw(frame, popup_area);
 	}
 }
