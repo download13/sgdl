@@ -5,3 +5,5 @@
 /testdata/working/
 
 .env
+
+/logs/
