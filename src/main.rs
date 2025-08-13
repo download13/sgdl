@@ -159,7 +159,7 @@ fn setup_logger() -> Result<(), fern::InitError> {
 			))
 		})
 		.level(log::LevelFilter::Debug)
-		.chain(fern::log_file("output.log")?)
+		.chain(fern::log_file("logs/output.log")?)
 		.apply()?;
 	Ok(())
 }

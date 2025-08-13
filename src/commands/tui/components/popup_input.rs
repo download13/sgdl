@@ -1,17 +1,22 @@
-use ratatui::{crossterm::event::Event, prelude::Rect, widgets, Frame};
+use ratatui::{prelude::Rect, widgets, Frame};
+use tuirealm::{Component, Event};
 
-use crate::commands::tui::components::{Component, LineInput};
+use super::LineInput;
 
 #[derive(Default)]
-pub struct InputPopup<'a> {
-	input: LineInput<'a>,
+pub struct PopupInput {
+	input: LineInput,
 }
 
-impl<'a> Component for InputPopup<'a> {
-	type Action = <LineInput<'a> as Component>::Action;
+impl PopupInput {
+	pub fn value(&self) -> &str {
+		self.input.value()
+	}
+}
 
-	fn init(&mut self) {
-		self.input.init();
+impl Component<Msg, UserEvent> for PopupInput {
+	fn on(&mut self, ev: Event<UserEvent>) -> Msg {
+		// TODO
 	}
 
 	fn update(&mut self, action: &Self::Action) {
@@ -22,11 +27,7 @@ impl<'a> Component for InputPopup<'a> {
 		self.input.handle_events(event);
 	}
 
-	fn focused(&mut self, focused: bool) {
-		self.input.focused(focused);
-	}
-
-	fn draw(&mut self, frame: &mut Frame, area: Rect) {
+	fn draw(&mut self, frame: &mut Frame, area: Rect, attr: Self::Attr) {
 		// Center the popup in the area
 		let popup_width = 40;
 		let popup_height = 3;
@@ -43,6 +44,12 @@ impl<'a> Component for InputPopup<'a> {
 		frame.render_widget(widgets::Clear, popup_area);
 
 		// Draw the input with a border
-		self.input.draw(frame, popup_area);
+		self.input.draw(frame, popup_area, attr);
 	}
 }
+
+#[derive(Clone, PartialEq, Eq, PartialOrd)]
+enum Msg {}
+
+#[derive(Clone, PartialEq, Eq, PartialOrd)]
+enum UserEvent {}

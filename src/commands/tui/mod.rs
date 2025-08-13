@@ -1,333 +1,245 @@
 mod components;
 
-use std::collections::HashMap;
+use std::time::{Duration, SystemTime};
 
 use log::error;
 use ratatui::{
-	crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers},
-	layout::{Constraint, Layout, Rect},
-	style::{Color, Style, Styled, Stylize},
-	text::Line,
-	widgets::{Block, Borders, Row, Table, TableState},
-	DefaultTerminal, Frame,
+	layout::{Alignment, Constraint, Direction, Layout},
+	style::{Color, Modifier},
 };
-use reqwest::Url;
-use tokio::sync::mpsc;
-use tui_input::{backend::crossterm::EventHandler, Input};
-use unicode_width::UnicodeWidthStr;
+use tui_realm_stdlib::{Input, List};
+use tuirealm::{
+	terminal::{CrosstermTerminalAdapter, TerminalAdapter, TerminalBridge},
+	Application, EventListenerCfg, NoUserEvent, PollStrategy, Sub, Update,
+};
 
-use crate::{
-	commands::tui::components::{Component, LineInput},
-	file_store::download_manager::{DownloadManager, DownloadProgress},
-	media_types::MediaItem,
-	Context,
-};
+use crate::Context;
+use components::{LineInput, PopupInput};
 
 pub async fn tui_command(context: &mut Context) {
-	let terminal = ratatui::init();
+	let mut model = Model::new(context);
 
-	let mut state = TuiState::default();
-
-	if let Err(err) = state.run(terminal, context).await {
-		error!("{:#?}", err);
-	};
-
-	ratatui::restore();
-}
-
-#[derive(Debug, PartialEq, Eq, Default, Copy, Clone)]
-enum CyclableInputMode {
-	#[default]
-	Search,
-	List,
-}
-
-#[derive(Debug, PartialEq, Eq, Copy, Clone)]
-enum InputMode {
-	Cyclable(CyclableInputMode),
-	/// Store the previous state while the popup is active
-	AddUrl(CyclableInputMode),
-}
-
-impl Default for InputMode {
-	fn default() -> Self {
-		Self::Cyclable(CyclableInputMode::Search)
-	}
-}
-
-impl InputMode {
-	fn next(&self) -> InputMode {
-		if let Self::Cyclable(cyclable) = self {
-			return InputMode::Cyclable(match cyclable {
-				CyclableInputMode::List => CyclableInputMode::Search,
-				CyclableInputMode::Search => CyclableInputMode::List,
-			});
+	// let's loop until quit is true
+	while !model.exit {
+		// Tick
+		if let Ok(messages) = model.app.tick(PollStrategy::Once) {
+			for msg in messages.into_iter() {
+				let mut msg = Some(msg);
+				while msg.is_some() {
+					msg = model.update(msg);
+				}
+			}
 		}
 
-		*self
+		// Redraw
+		if model.redraw {
+			model.view();
+			model.redraw = false;
+		}
 	}
 
-	fn prev(&self) -> InputMode {
-		self.next()
-	}
+	// Terminate terminal
+	let _ = model.terminal.restore();
 }
 
-struct TuiState<'a> {
-	mode: InputMode,
-	search_input: LineInput<'a>,
-	add_url_input: Input,
-	table_state: TableState,
-	download_manager: DownloadManager,
-	download_progress: HashMap<Url, DownloadProgress>,
-	progress_tx: mpsc::Sender<(Url, DownloadProgress)>,
-	receiver_rx: mpsc::Receiver<(Url, DownloadProgress)>,
+#[derive(PartialEq, Eq, Clone, Hash)]
+pub enum Id {
+	App,
+	SearchInput,
+	TrackList,
+	Instructions,
+	AddUrlPopup,
 }
 
-impl<'a> Default for TuiState<'a> {
-	fn default() -> Self {
-		let (progress_tx, receiver_rx) = mpsc::channel(32);
+#[derive(PartialEq, Eq, Clone, Hash)]
+enum Msg {
+	None,
+	Exit,
+	SearchUpdate(String),
+	AddUrl(String),
+}
 
-		let mut search_input = LineInput::default();
-		search_input.focused(true);
+struct Model<T>
+where
+	T: TerminalAdapter,
+{
+	/// Application
+	app: Application<Id, Msg, NoUserEvent>,
+	/// Indicates that the application must quit
+	exit: bool,
+	/// Tells whether to redraw interface
+	redraw: bool,
+	/// Used to draw to terminal
+	terminal: TerminalBridge<T>,
 
+	search_input: LineInput,
+	add_url_input: PopupInput,
+	context: Context,
+	// table_state: TableState,
+	// download_manager: DownloadManager,
+	// download_progress: HashMap<Url, DownloadProgress>,
+	// progress_tx: mpsc::Sender<(Url, DownloadProgress)>,
+	// receiver_rx: mpsc::Receiver<(Url, DownloadProgress)>,
+}
+
+impl Model<CrosstermTerminalAdapter> {
+	fn new(context: &mut Context) -> Self {
+		let mut app: Application<Id, Msg, NoUserEvent> = Application::init(
+			EventListenerCfg::default().crossterm_input_listener(Duration::from_millis(10), 10),
+		);
+
+		assert!(app
+			.mount(Id::SearchInput, Box::new(Input::default()), vec![])
+			.is_ok());
+
+		assert!(app
+			.mount(Id::TrackList, Box::new(List::default()), vec![])
+			.is_ok());
+
+		// We need to give focus to input then
+		assert!(app.active(&Id::SearchInput).is_ok());
 		Self {
-			mode: InputMode::default(),
-			search_input,
-			add_url_input: Input::default(),
-			table_state: TableState::default(),
-			download_manager: DownloadManager::default(),
-			download_progress: HashMap::default(),
-			progress_tx,
-			receiver_rx,
+			app: Self::init_app(),
+			exit: false,
+			redraw: true,
+			terminal: TerminalBridge::init_crossterm().expect("Cannot initialize terminal"),
 		}
 	}
 }
 
-impl TuiState<'_> {
-	async fn run(&mut self, mut terminal: DefaultTerminal, context: &mut Context) -> Result<(), ()> {
-		loop {
-			while let Ok((url, progress)) = self.receiver_rx.try_recv() {
-				self.download_progress.insert(url, progress);
-			}
+impl<T> Model<T>
+where
+	T: TerminalAdapter,
+{
+	pub fn view(&mut self) {
+		assert!(self
+			.terminal
+			.draw(|f| {
+				let area = f.area();
 
-			let search_results = context.search(self.search_input.value(), None).await;
+				let chunks = Layout::default()
+					.direction(Direction::Vertical)
+					.margin(1)
+					.constraints(
+						[
+							Constraint::Length(3), // Clock
+							Constraint::Length(3), // Letter Counter
+							Constraint::Length(1), // Label
+						]
+						.as_ref(),
+					)
+					.split(area);
 
-			let event = match event::read() {
-				Ok(event) => event,
-				Err(err) => {
-					log::error!("Error reading event: {}", err);
-					break;
-				}
-			};
+				self.app.view(&Id::SearchInput, f, chunks[0]);
+				self.app.view(&Id::TrackList, f, chunks[1]);
+				self.app.view(&Id::Instructions, f, chunks[2]);
 
-			match event {
-				Event::Key(key) => {
-					if key.kind == KeyEventKind::Press {
-						match key.code {
-							KeyCode::Esc => match self.mode {
-								InputMode::AddUrl(cyclable) => {
-									self.mode = InputMode::Cyclable(cyclable);
-								}
-								InputMode::Cyclable(_) => {
-									break;
-								}
-							},
-							KeyCode::Tab => {
-								if key.modifiers.contains(KeyModifiers::SHIFT) {
-									self.mode = self.mode.prev();
-								} else {
-									self.mode = self.mode.next();
-								}
-
-								self
-									.search_input
-									.focused(self.mode == InputMode::Cyclable(CyclableInputMode::Search));
-							}
-							_ => {}
-						};
-
-						match self.mode {
-							InputMode::AddUrl(_) => self.handle_add_url(&event).await,
-							InputMode::Cyclable(CyclableInputMode::Search) => {
-								self.search_input.handle_events(&event);
-								self.table_state.select(None);
-							}
-							InputMode::Cyclable(CyclableInputMode::List) => {
-								self.handle_list_keys(key, &search_results).await
-							}
-						};
-					}
-				}
-				Event::Resize(width, height) => {
-					// Handle resize events
-					if let Err(err) = terminal.resize(Rect {
-						x: 0,
-						y: 0,
-						width,
-						height,
-					}) {
-						error!("{:#?}", err);
-					};
-				}
-				_ => {}
-			}
-
-			if let Err(e) = terminal.draw(|frame| {
-				self.render(frame, &search_results);
-			}) {
-				log::error!("Error drawing terminal: {}", e);
-				break;
-			}
-		}
-
-		log::debug!("User terminated program");
-
-		Ok(())
+				self.app.view(&Id::AddUrlPopup, f, area);
+			})
+			.is_ok());
 	}
 
-	async fn handle_list_keys(&mut self, key: KeyEvent, search_results: &[impl MediaItem]) {
-		if key.kind == KeyEventKind::Release {
-			return;
-		}
+	fn init_app() -> Application<Id, Msg, NoUserEvent> {
+		// Setup application
+		// NOTE: NoUserEvent is a shorthand to tell tui-realm we're not going to use any custom user event
+		// NOTE: the event listener is configured to use the default crossterm input listener and to raise a Tick event each second
+		// which we will use to update the clock
 
-		match key.code {
-			KeyCode::Up => {
-				self.table_state.scroll_up_by(1);
-			}
-			KeyCode::Down => {
-				self.table_state.scroll_down_by(1);
-			}
-			KeyCode::Char('d') => {
-				let Some(index) = self.table_state.selected() else {
-					return;
-				};
-				let track = search_results[index].clone();
-				self
-					.download_manager
-					.start_download(track, self.progress_tx.clone())
-					.await;
-			}
-			_ => {}
-		}
-	}
+		let mut app: Application<Id, Msg, NoUserEvent> = Application::init(
+			EventListenerCfg::default()
+				.crossterm_input_listener(Duration::from_millis(20), 3)
+				.poll_timeout(Duration::from_millis(10))
+				.tick_interval(Duration::from_secs(1)),
+		);
 
-	async fn handle_add_url(&mut self, event: &Event) {
-		self.add_url_input.handle_event(event);
-	}
+		// Mount components
+		assert!(app
+			.mount(
+				Id::SearchInput,
+				Box::new(
+					Label::default()
+						.//text("Waiting for a Msg...")
+						.alignment(Alignment::Left)
+						.background(Color::Reset)
+						.foreground(Color::LightYellow)
+						.modifiers(Modifier::BOLD),
+				),
+				Vec::default(),
+			)
+			.is_ok());
 
-	fn render(&mut self, frame: &mut Frame, search_results: &[impl MediaItem]) {
-		let area = frame.area();
+		// Mount clock, subscribe to tick
+		assert!(app
+			.mount(
+				Id::Clock,
+				Box::new(
+					Clock::new(SystemTime::now())
+						.alignment(Alignment::Center)
+						.background(Color::Reset)
+						.foreground(Color::Cyan)
+						.modifiers(Modifier::BOLD)
+				),
+				vec![Sub::new(SubEventClause::Tick, SubClause::Always)]
+			)
+			.is_ok());
 
-		let [search_input_area, search_results_area] =
-			Layout::vertical([Constraint::Length(3), Constraint::Fill(1)]).areas(area);
+		// Mount counters
+		assert!(app
+			.mount(
+				Id::LetterCounter,
+				Box::new(LetterCounter::new(0)),
+				Vec::new()
+			)
+			.is_ok());
 
-		self.search_input.draw(frame, search_input_area);
+		assert!(app
+			.mount(
+				Id::DigitCounter,
+				Box::new(DigitCounter::new(5)),
+				Vec::default()
+			)
+			.is_ok());
 
-		self.render_search_results(frame, search_results_area, search_results);
-
-		match self.mode {
-			InputMode::AddUrl(_) => {
-				let popup_area = Rect {
-					x: area.width / 4,
-					y: area.height / 3,
-					width: area.width / 2,
-					height: area.height / 3,
-				};
-
-				// let input_popup = InputPopup::default()
-				// 	.content("fdf")
-				// 	.title("Add Url")
-				// 	.title_style(Style::new().yellow().bold())
-				// 	.border_style(Color::Yellow.into());
-
-				// frame.render_stateful_widget(input_popup, area, &mut self.add_url_state);
-			}
-			InputMode::Cyclable(_) => {}
-		}
-	}
-
-	fn render_search_results(
-		&self,
-		frame: &mut Frame,
-		area: Rect,
-		search_results: &[impl MediaItem],
-	) {
-		let selected = self.mode == InputMode::Cyclable(CyclableInputMode::List);
-
-		let rows = search_results.iter().map(media_item_to_row);
-
-		let (title_width, author_width, source_width, type_width) =
-			constraint_len_calculator(search_results);
-
-		let style = match selected {
-			true => Color::Yellow.into(),
-			false => Style::default(),
-		};
-
-		let list = Table::new(
-			rows,
-			[
-				Constraint::Length(title_width + 1),
-				Constraint::Min(author_width + 1),
-				Constraint::Min(source_width + 1),
-				Constraint::Min(type_width),
-			],
-		)
-		.block(
-			Block::default().borders(Borders::ALL).title_bottom(
-				Line::from(vec![
-					"Quit ".into(),
-					"<Esc>".blue(),
-					" Switch focus ".into(),
-					"<Tab>".set_style(Color::Blue),
-					" Download selected ".into(),
-					"<d>".set_style(Color::Blue),
-					" abort download ".into(),
-					"<a>".set_style(Color::Blue),
-				])
-				.centered(),
-			),
-		)
-		.style(style)
-		.row_highlight_style(Style::default().fg(Color::Yellow));
-
-		frame.render_widget(list, area);
+		// Active letter counter
+		assert!(app.active(&Id::LetterCounter).is_ok());
+		app
 	}
 }
 
-fn constraint_len_calculator(items: &[impl MediaItem]) -> (u16, u16, u16, u16) {
-	let title_width = items
-		.iter()
-		.map(|item| item.get_title().width() as u16)
-		.max()
-		.unwrap_or(0);
-
-	let author_width = items
-		.iter()
-		.map(|item| item.get_author().width() as u16)
-		.max()
-		.unwrap_or(0);
-
-	let source_width = items
-		.iter()
-		.map(|item| item.get_source().to_string().width() as u16)
-		.max()
-		.unwrap_or(0);
-
-	let type_width = items
-		.iter()
-		.map(|item| item.get_type().to_string().width() as u16)
-		.max()
-		.unwrap_or(0);
-
-	(title_width, author_width, source_width, type_width)
-}
-
-fn media_item_to_row(item: &impl MediaItem) -> Row<'static> {
-	Row::new([
-		item.get_title(),
-		item.get_author(),
-		item.get_source().to_string(),
-		item.get_type().to_string(),
-	])
+impl<T> Update<Msg> for Model<T>
+where
+	T: TerminalAdapter,
+{
+	fn update(&mut self, msg: Option<Msg>) -> Option<Msg> {
+		self.redraw = true;
+		match msg.unwrap_or(Msg::None) {
+			Msg::Exit => {
+				self.exit = true;
+				None
+			}
+			Msg::SearchUpdate(query) => self.None,
+			Msg::GoTo(path) => {
+				// Go to and reload tree
+				self.scan_dir(path.as_path());
+				self.reload_tree();
+				None
+			}
+			Msg::GoToUpperDir => {
+				if let Some(parent) = self.upper_dir() {
+					self.scan_dir(parent.as_path());
+					self.reload_tree();
+				}
+				None
+			}
+			Msg::FsTreeBlur => {
+				assert!(self.app.active(&Id::GoTo).is_ok());
+				None
+			}
+			Msg::GoToBlur => {
+				assert!(self.app.active(&Id::FsTree).is_ok());
+				None
+			}
+			Msg::None => None,
+		}
+	}
 }
