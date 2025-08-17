@@ -1,16 +1,11 @@
 mod components;
 
-use std::time::{Duration, SystemTime};
+use std::time::Duration;
 
-use log::error;
-use ratatui::{
-	layout::{Alignment, Constraint, Direction, Layout},
-	style::{Color, Modifier},
-};
-use tui_realm_stdlib::{Input, List};
+use ratatui::layout::{Constraint, Direction, Layout};
 use tuirealm::{
 	terminal::{CrosstermTerminalAdapter, TerminalAdapter, TerminalBridge},
-	Application, EventListenerCfg, NoUserEvent, PollStrategy, Sub, Update,
+	Application, EventListenerCfg, NoUserEvent, PollStrategy, Update,
 };
 
 use crate::Context;
@@ -59,7 +54,7 @@ enum Msg {
 	AddUrl(String),
 }
 
-struct Model<T>
+struct Model<'a, T>
 where
 	T: TerminalAdapter,
 {
@@ -74,7 +69,7 @@ where
 
 	search_input: LineInput,
 	add_url_input: PopupInput,
-	context: Context,
+	context: &'a mut Context,
 	// table_state: TableState,
 	// download_manager: DownloadManager,
 	// download_progress: HashMap<Url, DownloadProgress>,
@@ -82,32 +77,35 @@ where
 	// receiver_rx: mpsc::Receiver<(Url, DownloadProgress)>,
 }
 
-impl Model<CrosstermTerminalAdapter> {
+impl<'a> Model<'a, CrosstermTerminalAdapter> {
 	fn new(context: &mut Context) -> Self {
 		let mut app: Application<Id, Msg, NoUserEvent> = Application::init(
 			EventListenerCfg::default().crossterm_input_listener(Duration::from_millis(10), 10),
 		);
 
-		assert!(app
-			.mount(Id::SearchInput, Box::new(Input::default()), vec![])
-			.is_ok());
+		let search_input = LineInput::default();
+		let add_url_input = PopupInput::default();
 
 		assert!(app
-			.mount(Id::TrackList, Box::new(List::default()), vec![])
+			.mount(Id::SearchInput, Box::new(LineInput::default()), vec![])
 			.is_ok());
 
 		// We need to give focus to input then
 		assert!(app.active(&Id::SearchInput).is_ok());
+
 		Self {
 			app: Self::init_app(),
 			exit: false,
 			redraw: true,
 			terminal: TerminalBridge::init_crossterm().expect("Cannot initialize terminal"),
+			search_input,
+			add_url_input,
+			context: context,
 		}
 	}
 }
 
-impl<T> Model<T>
+impl<'a, T> Model<'a, T>
 where
 	T: TerminalAdapter,
 {
@@ -153,60 +151,28 @@ where
 		);
 
 		// Mount components
-		assert!(app
+		assert!(app.mount(
 			.mount(
 				Id::SearchInput,
 				Box::new(
-					Label::default()
+					LineInput::default()
 						.//text("Waiting for a Msg...")
-						.alignment(Alignment::Left)
-						.background(Color::Reset)
-						.foreground(Color::LightYellow)
-						.modifiers(Modifier::BOLD),
+						// .alignment(Alignment::Left)
+						// .background(Color::Reset)
+						// .foreground(Color::LightYellow)
+						// .modifiers(Modifier::BOLD),
 				),
 				Vec::default(),
 			)
 			.is_ok());
 
-		// Mount clock, subscribe to tick
-		assert!(app
-			.mount(
-				Id::Clock,
-				Box::new(
-					Clock::new(SystemTime::now())
-						.alignment(Alignment::Center)
-						.background(Color::Reset)
-						.foreground(Color::Cyan)
-						.modifiers(Modifier::BOLD)
-				),
-				vec![Sub::new(SubEventClause::Tick, SubClause::Always)]
-			)
-			.is_ok());
-
-		// Mount counters
-		assert!(app
-			.mount(
-				Id::LetterCounter,
-				Box::new(LetterCounter::new(0)),
-				Vec::new()
-			)
-			.is_ok());
-
-		assert!(app
-			.mount(
-				Id::DigitCounter,
-				Box::new(DigitCounter::new(5)),
-				Vec::default()
-			)
-			.is_ok());
-
 		// Active letter counter
-		assert!(app.active(&Id::LetterCounter).is_ok());
+		assert!(app.active(&Id::SearchInput).is_ok());
 		app
 	}
 }
 
-impl<T> Update<Msg> for Model<T>
+impl<'a, T> Update<Msg> for Model<'a, T>
 where
 	T: TerminalAdapter,
 {
@@ -217,26 +183,13 @@ where
 				self.exit = true;
 				None
 			}
-			Msg::SearchUpdate(query) => self.None,
-			Msg::GoTo(path) => {
-				// Go to and reload tree
-				self.scan_dir(path.as_path());
-				self.reload_tree();
+			Msg::SearchUpdate(query) => {
+				log::debug!("Search update: {}", query);
+				self.context.search(&query, None);
 				None
 			}
-			Msg::GoToUpperDir => {
-				if let Some(parent) = self.upper_dir() {
-					self.scan_dir(parent.as_path());
-					self.reload_tree();
-				}
-				None
-			}
-			Msg::FsTreeBlur => {
-				assert!(self.app.active(&Id::GoTo).is_ok());
-				None
-			}
-			Msg::GoToBlur => {
-				assert!(self.app.active(&Id::FsTree).is_ok());
+			Msg::AddUrl(url) => {
+				self.context.add_url(url);
 				None
 			}
 			Msg::None => None,
