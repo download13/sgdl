@@ -1,5 +1,3 @@
-#![feature(macro_metavar_expr_concat)]
-
 mod commands;
 mod common;
 mod config;
@@ -15,9 +13,9 @@ use config::Config;
 use diesel::prelude::*;
 use diesel::SqliteConnection;
 use diesel_migrations::{embed_migrations, EmbeddedMigrations, MigrationHarness};
-use std::path::Path;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::time::SystemTime;
+use tokio::fs::create_dir_all;
 use Commands::*;
 
 use file_store::FileStore;
@@ -44,7 +42,7 @@ enum Commands {
 		/// URL or other indicator of media to scan
 		media_string: String,
 	},
-	Tui,
+	Gui,
 }
 
 impl Clone for Context {
@@ -60,7 +58,7 @@ impl Clone for Context {
 #[tokio::main]
 async fn main() {
 	// simple_logger::SimpleLogger::new().env().init().unwrap();
-	if let Err(err) = setup_logger() {
+	if let Err(err) = setup_logger().await {
 		eprint!("Unable to start logging system: {}", err);
 		return;
 	}
@@ -101,19 +99,10 @@ async fn main() {
 		Scan { media_string } => {
 			commands::scan_command(media_string, &mut context).await;
 		}
-		Tui => {
-			commands::tui_command(&mut context).await;
+		Gui => {
+			commands::start_gui(&mut context);
 		}
-		_ => (),
 	};
-}
-
-async fn display_progress(total: u64, downloaded: u64) {
-	let percentage = (downloaded as f64 / total as f64) * 100.0;
-	println!(
-		"Downloaded: {} of {} bytes ({:.2}%)",
-		downloaded, total, percentage
-	);
 }
 
 pub const MIGRATIONS: EmbeddedMigrations = embed_migrations!("migrations");
@@ -147,7 +136,15 @@ fn establish_connection(data_path: &Path) -> SqliteConnection {
 	conn
 }
 
-fn setup_logger() -> Result<(), fern::InitError> {
+async fn setup_logger() -> Result<(), fern::InitError> {
+	let log_dir = PathBuf::from("logs");
+	let log_path = log_dir.join("output.log");
+
+	if let Err(err) = create_dir_all(log_dir).await {
+		eprintln!("Failed to create log directory: {}", err);
+		return Err(fern::InitError::Io(err));
+	}
+
 	fern::Dispatch::new()
 		.format(|out, message, record| {
 			out.finish(format_args!(
@@ -159,7 +156,8 @@ fn setup_logger() -> Result<(), fern::InitError> {
 			))
 		})
 		.level(log::LevelFilter::Debug)
-		.chain(fern::log_file("logs/output.log")?)
+		.chain(fern::log_file(log_path)?)
 		.apply()?;
+
 	Ok(())
 }

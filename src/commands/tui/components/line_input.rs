@@ -1,25 +1,10 @@
-use ratatui::style::{Styled, Stylize};
-use ratatui::{
-	prelude::Rect,
-	widgets::{Block, Paragraph},
-	Frame,
-};
-use tui_realm_stdlib::Input;
-use tuirealm::event::{Key, KeyEvent};
-use tuirealm::{command::Cmd, AttrValue, Attribute, MockComponent, State};
-use tuirealm::{Component, Event, NoUserEvent};
+use rxtui::prelude::*;
 
 use crate::commands::tui::Msg;
 
 #[derive(Default, MockComponent)]
 pub struct LineInput {
 	component: Input,
-}
-
-impl LineInput {
-	pub fn new() -> Self {
-		Self::default()
-	}
 }
 
 impl Component<Msg, NoUserEvent> for LineInput {

@@ -49,7 +49,9 @@ impl MediaType {
 // KemonoPost -> Vec<MediaItem>
 
 pub trait MediaPointer {
+	#[allow(warnings)]
 	async fn fetch_metadata(&self) -> Vec<impl MediaMetadata>;
+	#[allow(warnings)]
 	async fn fetch_blob_pointer(&self) -> Option<impl MediaBlobPointer>;
 }
 
@@ -76,5 +78,6 @@ where
 	fn get_pointer(&self) -> impl MediaPointer;
 	fn get_blob_pointer(&self) -> impl MediaBlobPointer;
 
+	#[allow(warnings)]
 	async fn search(context: &mut Context, query: &str) -> Vec<Self>;
 }

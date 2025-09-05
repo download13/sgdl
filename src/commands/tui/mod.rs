@@ -78,7 +78,7 @@ where
 }
 
 impl<'a> Model<'a, CrosstermTerminalAdapter> {
-	fn new(context: &mut Context) -> Self {
+	fn new(context: &'a mut Context) -> Self {
 		let mut app: Application<Id, Msg, NoUserEvent> = Application::init(
 			EventListenerCfg::default().crossterm_input_listener(Duration::from_millis(10), 10),
 		);
@@ -100,7 +100,7 @@ impl<'a> Model<'a, CrosstermTerminalAdapter> {
 			terminal: TerminalBridge::init_crossterm().expect("Cannot initialize terminal"),
 			search_input,
 			add_url_input,
-			context: context,
+			context,
 		}
 	}
 }
@@ -120,9 +120,9 @@ where
 					.margin(1)
 					.constraints(
 						[
-							Constraint::Length(3), // Clock
-							Constraint::Length(3), // Letter Counter
-							Constraint::Length(1), // Label
+							Constraint::Length(3), // Search Input
+							Constraint::Length(3), // Item List
+							Constraint::Length(1), // Instructions
 						]
 						.as_ref(),
 					)
@@ -151,16 +151,15 @@ where
 		);
 
 		// Mount components
-		assert!(app.mount(
+		assert!(app
 			.mount(
 				Id::SearchInput,
 				Box::new(
-					LineInput::default()
-						.//text("Waiting for a Msg...")
-						// .alignment(Alignment::Left)
-						// .background(Color::Reset)
-						// .foreground(Color::LightYellow)
-						// .modifiers(Modifier::BOLD),
+					LineInput::default() //text("Waiting for a Msg...")
+					                     // .alignment(Alignment::Left)
+					                     // .background(Color::Reset)
+					                     // .foreground(Color::LightYellow)
+					                     // .modifiers(Modifier::BOLD),
 				),
 				Vec::default(),
 			)
@@ -185,7 +184,7 @@ where
 			}
 			Msg::SearchUpdate(query) => {
 				log::debug!("Search update: {}", query);
-				self.context.search(&query, None);
+				let future = self.context.search(&query, None);
 				None
 			}
 			Msg::AddUrl(url) => {

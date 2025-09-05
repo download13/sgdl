@@ -15,11 +15,11 @@ macro_rules! generate_update_type {
             $($field_vis $field_name: $field_type),*
         }
 
-        // Create the optional version with "Update" suffix
-        $(#[$meta])*
-				#[derive($($update_derive),*)]
-        $vis struct ${concat($name, Update)} {
-            $($field_vis $field_name: Option<$field_type>),*
-        }
+        // // Create the optional version with "Update" suffix
+        // $(#[$meta])*
+		// 		#[derive($($update_derive),*)]
+        // $vis struct ${concat($name, Update)} {
+        //     $($field_vis $field_name: Option<$field_type>),*
+        // }
     };
 }

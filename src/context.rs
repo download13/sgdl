@@ -35,11 +35,11 @@ impl Context {
 			match pointer {
 				PointerType::SoundgasmTrack(track) => {
 					log::debug!("Adding Soundgasm track: {:?}", track);
-					SoundgasmAudioTrack::add(self, track);
+					// SoundgasmAudioTrack::add(self, track);
 				}
 				PointerType::SoundgasmProfile(profile) => {
 					log::debug!("Adding Soundgasm profile: {:?}", profile);
-					SoundgasmAudioTrack::add_profile(self, profile);
+					// SoundgasmAudioTrack::add_profile(self, profile);
 				}
 				PointerType::KemonoPost(post) => {
 					log::debug!("Adding Kemono post: {:?}", post);

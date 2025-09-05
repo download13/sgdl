@@ -1,5 +1,5 @@
+mod gui;
 mod scan;
-mod tui;
 
+pub use gui::start_gui;
 pub use scan::scan_command;
-pub use tui::tui_command;

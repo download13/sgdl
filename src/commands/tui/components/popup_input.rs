@@ -1,5 +1,4 @@
-use ratatui::{prelude::Rect, widgets, Frame};
-use tuirealm::{Component, Event, MockComponent};
+use tuirealm::MockComponent;
 
 use super::LineInput;
 
